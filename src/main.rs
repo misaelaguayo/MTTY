@@ -8,6 +8,7 @@ use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use sdl2::render::TextureQuery;
+use term::Terminal;
 
 mod term;
 
@@ -45,7 +46,8 @@ fn get_centered_rect(rect_width: u32, rect_height: u32, cons_width: u32, cons_he
     rect!(cx, cy, w, h)
 }
 
-fn run(){
+fn run(terminal: Terminal){
+    terminal.frontend
 }
 
 fn setup_font(font_path: &Path) -> Result<(), String> {
@@ -57,7 +59,6 @@ fn setup_font(font_path: &Path) -> Result<(), String> {
         .window("MTTY", SCREEN_WIDTH, SCREEN_HEIGHT)
         .position_centered()
         .opengl()
-        .build()
         .map_err(|e| e.to_string())?;
 
     let mut canvas = window.into_canvas().build().map_err(|e| e.to_string())?;
@@ -119,7 +120,7 @@ fn main() -> Result<(), String> {
     } else {
         let path: &Path = Path::new(&args[1]);
         setup_font(path)?;
-        run();
+        // run();
     }
 
     Ok(())

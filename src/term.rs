@@ -2,9 +2,13 @@ pub struct State {
     commands: Vec<String>
 }
 
+pub trait Frontend {
+    fn r#type(&self);
+}
+
 pub struct Terminal {
-   frontend: State,
-   backend: State
+   pub frontend: Box<dyn Frontend>,
+   pub backend: State
 }
 
 
