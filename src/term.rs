@@ -1,21 +1,132 @@
-use crate::Path;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use sdl2::render::TextureQuery;
+use std::path::Path;
+
+pub struct Terminal {
+    pub frontend: Box<dyn Frontend>,
+    pub backend: State,
+}
 
 pub struct State {
     commands: Vec<String>,
 }
 
 pub trait Frontend {
-    fn r#type(&self);
+    fn r#type(&mut self, text: &str);
+    fn poll_event(&mut self);
 }
 
-pub struct Terminal {
-    pub frontend: Box<dyn Frontend>,
-    pub backend: State,
+pub struct Sdl2TerminalFrontend {
+    pub buffer: Vec<String>,
+    pub canvas: sdl2::render::Canvas<sdl2::video::Window>,
+    pub sdl_context: sdl2::Sdl,
+}
+
+impl Sdl2TerminalFrontend {
+    pub fn new() -> Sdl2TerminalFrontend {
+        let sdl_context = sdl2::init().unwrap();
+        let video_subsys = sdl_context.video().unwrap();
+        let window = video_subsys
+            .window("MTTY", 800, 600)
+            .position_centered()
+            .opengl()
+            .build()
+            .unwrap();
+        let canvas = window
+            .into_canvas()
+            .build()
+            .map_err(|e| e.to_string())
+            .unwrap();
+        Sdl2TerminalFrontend {
+            canvas,
+            sdl_context,
+            buffer: Vec::new(),
+        }
+    }
+}
+
+impl Frontend for Sdl2TerminalFrontend {
+    fn r#type(&mut self, text: &str) {
+        self.buffer.push(text.to_string());
+        let buffer_string = self.buffer.join("");
+
+        let texture_creator = self.canvas.texture_creator();
+        let font_path = Path::new("./fonts/Arial-Unicode.ttf");
+        let binding = sdl2::ttf::init().unwrap();
+        let mut font = binding.load_font(font_path, 128).unwrap();
+        font.set_style(sdl2::ttf::FontStyle::NORMAL);
+        let surface = font
+            .render(&buffer_string)
+            .blended(Color::RGBA(255, 255, 255, 255))
+            .map_err(|e| e.to_string())
+            .unwrap();
+        let texture = texture_creator
+            .create_texture_from_surface(&surface)
+            .map_err(|e| e.to_string())
+            .unwrap();
+
+        self.canvas.set_draw_color(Color::RGBA(0, 0, 0, 255));
+        self.canvas.clear();
+
+        let TextureQuery { width, height, .. } = texture.query();
+
+        let padding = 64;
+        let target = get_centered_rect(
+            width,
+            height,
+            SCREEN_WIDTH - padding,
+            SCREEN_HEIGHT - padding,
+        );
+
+        self.canvas.copy(&texture, None, Some(target)).unwrap();
+        self.canvas.present();
+    }
+
+    fn poll_event(&mut self) {
+        let mut event_pump = self.sdl_context.event_pump().unwrap();
+        'mainloop: loop {
+            for event in event_pump.poll_iter() {
+                match event {
+                    Event::KeyDown {
+                        keycode: Some(Keycode::Escape),
+                        ..
+                    }
+                    | Event::Quit { .. } => break 'mainloop,
+                    // TODO: Handle all other keycodes
+                    Event::KeyDown {
+                        keycode,
+                        ..
+                    } => {
+                        keycode.map(|keycode| {
+                            let key = keycode.to_string();
+                            if key.len() == 1 {
+                                self.r#type(&key);
+                            }
+                        });
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+}
+
+impl Terminal {
+    pub fn new() -> Terminal {
+        Terminal {
+            frontend: Box::new(Sdl2TerminalFrontend::new()),
+            backend: State {
+                commands: Vec::new(),
+            },
+        }
+    }
+
+    pub fn run(&mut self) {
+        self.frontend.poll_event();
+    }
 }
 
 pub static SCREEN_WIDTH: u32 = 800;
@@ -50,65 +161,4 @@ fn get_centered_rect(rect_width: u32, rect_height: u32, cons_width: u32, cons_he
     let cx = (SCREEN_WIDTH as i32 - w) / 2;
     let cy = (SCREEN_HEIGHT as i32 - h) / 2;
     rect!(cx, cy, w, h)
-}
-
-pub fn setup_font(font_path: &Path) -> Result<(), String> {
-    let sdl_context = sdl2::init()?;
-    let video_subsys = sdl_context.video()?;
-    let ttf_context = sdl2::ttf::init().map_err(|e| e.to_string())?;
-
-    let window = video_subsys
-        .window("MTTY", SCREEN_WIDTH, SCREEN_HEIGHT)
-        .position_centered()
-        .opengl()
-        .build()
-        .map_err(|e| e.to_string())?;
-
-    let mut canvas = window.into_canvas().build().map_err(|e| e.to_string())?;
-    let texture_creator = canvas.texture_creator();
-
-    // Load a font
-    let mut font = ttf_context.load_font(font_path, 128)?;
-    font.set_style(sdl2::ttf::FontStyle::NORMAL);
-
-    // render a surface, and convert it to a texture bound to the canvas
-    let surface = font
-        .render("Hello Rust!")
-        .blended(Color::RGBA(255, 255, 255, 255))
-        .map_err(|e| e.to_string())?;
-    let texture = texture_creator
-        .create_texture_from_surface(&surface)
-        .map_err(|e| e.to_string())?;
-
-    canvas.set_draw_color(Color::RGBA(0, 0, 0, 255));
-    canvas.clear();
-
-    let TextureQuery { width, height, .. } = texture.query();
-
-    // If the example text is too big for the screen, downscale it (and center irregardless)
-    let padding = 64;
-    let target = get_centered_rect(
-        width,
-        height,
-        SCREEN_WIDTH - padding,
-        SCREEN_HEIGHT - padding,
-    );
-
-    canvas.copy(&texture, None, Some(target))?;
-    canvas.present();
-
-    'mainloop: loop {
-        for event in sdl_context.event_pump()?.poll_iter() {
-            match event {
-                Event::KeyDown {
-                    keycode: Some(Keycode::Escape),
-                    ..
-                }
-                | Event::Quit { .. } => break 'mainloop,
-                _ => {}
-            }
-        }
-    }
-
-    Ok(())
 }
