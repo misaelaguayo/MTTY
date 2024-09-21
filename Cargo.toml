@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+serde = { version = "1.0.210", features = ["derive"] }
+serde_toml = "0.0.1"
+toml = "0.8.19"
 
 [dependencies.sdl2]
 version = "0.37.0"

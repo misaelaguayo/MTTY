@@ -5,6 +5,8 @@ use sdl2::rect::Rect;
 use sdl2::render::TextureQuery;
 use std::path::Path;
 
+use crate::config::Config;
+
 pub struct Terminal {
     pub frontend: Box<dyn Frontend>,
     pub backend: State,
@@ -20,13 +22,14 @@ pub trait Frontend {
 }
 
 pub struct Sdl2TerminalFrontend {
+    pub config: Config,
     pub buffer: Vec<String>,
     pub canvas: sdl2::render::Canvas<sdl2::video::Window>,
     pub sdl_context: sdl2::Sdl,
 }
 
 impl Sdl2TerminalFrontend {
-    pub fn new() -> Sdl2TerminalFrontend {
+    pub fn build(config: Config) -> Sdl2TerminalFrontend {
         let sdl_context = sdl2::init().unwrap();
         let video_subsys = sdl_context.video().unwrap();
         let window = video_subsys
@@ -44,17 +47,19 @@ impl Sdl2TerminalFrontend {
             canvas,
             sdl_context,
             buffer: Vec::new(),
+            config,
         }
     }
 }
 
 impl Frontend for Sdl2TerminalFrontend {
     fn r#type(&mut self, text: &str) {
+        let config = &self.config;
+        let font_path = Path::new(&config.font_path);
+
         self.buffer.push(text.to_string());
         let buffer_string = self.buffer.join("");
-
         let texture_creator = self.canvas.texture_creator();
-        let font_path = Path::new("./fonts/Arial-Unicode.ttf");
         let binding = sdl2::ttf::init().unwrap();
         let mut font = binding.load_font(font_path, 128).unwrap();
         font.set_style(sdl2::ttf::FontStyle::NORMAL);
@@ -77,8 +82,10 @@ impl Frontend for Sdl2TerminalFrontend {
         let target = get_centered_rect(
             width,
             height,
-            SCREEN_WIDTH - padding,
-            SCREEN_HEIGHT - padding,
+            config.screen_width - padding,
+            config.screen_height - padding,
+            config.screen_width,
+            config.screen_height,
         );
 
         self.canvas.copy(&texture, None, Some(target)).unwrap();
@@ -96,10 +103,7 @@ impl Frontend for Sdl2TerminalFrontend {
                     }
                     | Event::Quit { .. } => break 'mainloop,
                     // TODO: Handle all other keycodes
-                    Event::KeyDown {
-                        keycode,
-                        ..
-                    } => {
+                    Event::KeyDown { keycode, .. } => {
                         keycode.map(|keycode| {
                             let key = keycode.to_string();
                             if key.len() == 1 {
@@ -115,9 +119,9 @@ impl Frontend for Sdl2TerminalFrontend {
 }
 
 impl Terminal {
-    pub fn new() -> Terminal {
+    pub fn build(config: Config) -> Terminal {
         Terminal {
-            frontend: Box::new(Sdl2TerminalFrontend::new()),
+            frontend: Box::new(Sdl2TerminalFrontend::build(config)),
             backend: State {
                 commands: Vec::new(),
             },
@@ -129,9 +133,6 @@ impl Terminal {
     }
 }
 
-pub static SCREEN_WIDTH: u32 = 800;
-pub static SCREEN_HEIGHT: u32 = 600;
-
 // handle the annoying Rect i32
 macro_rules! rect(
     ($x:expr, $y:expr, $w:expr, $h:expr) => (
@@ -140,7 +141,13 @@ macro_rules! rect(
 );
 
 // Scale fonts to a reasonable size when they're too big (though they might look less smooth)
-fn get_centered_rect(rect_width: u32, rect_height: u32, cons_width: u32, cons_height: u32) -> Rect {
+fn get_centered_rect(
+    rect_width: u32, 
+    rect_height: u32, 
+    cons_width: u32, 
+    cons_height: u32,
+    screen_width: u32,
+    screen_height: u32) -> Rect {
     let wr = rect_width as f32 / cons_width as f32;
     let hr = rect_height as f32 / cons_height as f32;
 
@@ -158,7 +165,7 @@ fn get_centered_rect(rect_width: u32, rect_height: u32, cons_width: u32, cons_he
         (rect_width as i32, rect_height as i32)
     };
 
-    let cx = (SCREEN_WIDTH as i32 - w) / 2;
-    let cy = (SCREEN_HEIGHT as i32 - h) / 2;
+    let cx = (screen_width as i32 - w) / 2;
+    let cy = (screen_height as i32 - h) / 2;
     rect!(cx, cy, w, h)
 }
