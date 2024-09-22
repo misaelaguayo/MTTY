@@ -1,3 +1,4 @@
 font_path = "fonts/Arial-Unicode.ttf"
+font_size = 16
 screen_width = 800
-screen_height = 800
+screen_height = 600

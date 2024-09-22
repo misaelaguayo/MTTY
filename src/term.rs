@@ -33,7 +33,7 @@ impl Sdl2TerminalFrontend {
         let sdl_context = sdl2::init().unwrap();
         let video_subsys = sdl_context.video().unwrap();
         let window = video_subsys
-            .window("MTTY", 800, 600)
+            .window("MTTY", config.screen_width, config.screen_height)
             .position_centered()
             .opengl()
             .build()
@@ -54,60 +54,70 @@ impl Sdl2TerminalFrontend {
 
 impl Frontend for Sdl2TerminalFrontend {
     fn r#type(&mut self, text: &str) {
-        let config = &self.config;
-        let font_path = Path::new(&config.font_path);
-
+        if text == "Backspace" {
+            if self.buffer.len() > 0 {
+                self.buffer.pop();
+            }
+            return;
+        }
         self.buffer.push(text.to_string());
-        let buffer_string = self.buffer.join("");
-        let texture_creator = self.canvas.texture_creator();
-        let binding = sdl2::ttf::init().unwrap();
-        let mut font = binding.load_font(font_path, 128).unwrap();
-        font.set_style(sdl2::ttf::FontStyle::NORMAL);
-        let surface = font
-            .render(&buffer_string)
-            .blended(Color::RGBA(255, 255, 255, 255))
-            .map_err(|e| e.to_string())
-            .unwrap();
-        let texture = texture_creator
-            .create_texture_from_surface(&surface)
-            .map_err(|e| e.to_string())
-            .unwrap();
-
-        self.canvas.set_draw_color(Color::RGBA(0, 0, 0, 255));
-        self.canvas.clear();
-
-        let TextureQuery { width, height, .. } = texture.query();
-
-        let padding = 64;
-        let target = get_centered_rect(
-            width,
-            height,
-            config.screen_width - padding,
-            config.screen_height - padding,
-            config.screen_width,
-            config.screen_height,
-        );
-
-        self.canvas.copy(&texture, None, Some(target)).unwrap();
-        self.canvas.present();
     }
 
     fn poll_event(&mut self) {
+        let config = &self.config.clone();
+        let font_path = Path::new(&config.font_path);
+        let binding = sdl2::ttf::init().unwrap();
+        let texture_creator = self.canvas.texture_creator();
+        let mut font = binding.load_font(font_path, config.font_size).unwrap();
+        font.set_style(sdl2::ttf::FontStyle::NORMAL);
+        self.canvas.set_draw_color(Color::RGBA(0, 0, 0, 255));
+
+        self.buffer.push(">: ".to_string());
         let mut event_pump = self.sdl_context.event_pump().unwrap();
         'mainloop: loop {
             for event in event_pump.poll_iter() {
+                let buffer_string = self.buffer.join("");
+                let surface = font
+                    .render(&buffer_string)
+                    .blended_wrapped(Color::RGBA(255, 255, 255, 255), config.screen_width)
+                    .map_err(|e| e.to_string())
+                    .unwrap();
+                let texture = texture_creator
+                    .create_texture_from_surface(&surface)
+                    .map_err(|e| e.to_string())
+                    .unwrap();
+
+                self.canvas.clear();
+
+                let TextureQuery { width, height, .. } = texture.query();
+
+                let target = get_text_rect(width, height);
+
+                self.canvas.copy(&texture, None, Some(target)).unwrap();
+                self.canvas.present();
+
                 match event {
                     Event::KeyDown {
                         keycode: Some(Keycode::Escape),
                         ..
                     }
                     | Event::Quit { .. } => break 'mainloop,
-                    // TODO: Handle all other keycodes
                     Event::KeyDown { keycode, .. } => {
                         keycode.map(|keycode| {
                             let key = keycode.to_string();
-                            if key.len() == 1 {
-                                self.r#type(&key);
+                            match key.as_str() {
+                                "Escape" => {
+                                    self.r#type("Escape");
+                                }
+                                "Return" => {
+                                    self.r#type("Return");
+                                }
+                                "Backspace" => {
+                                    self.r#type("Backspace");
+                                }
+                                _ => {
+                                    self.r#type(&key);
+                                }
                             }
                         });
                     }
@@ -140,32 +150,6 @@ macro_rules! rect(
     )
 );
 
-// Scale fonts to a reasonable size when they're too big (though they might look less smooth)
-fn get_centered_rect(
-    rect_width: u32, 
-    rect_height: u32, 
-    cons_width: u32, 
-    cons_height: u32,
-    screen_width: u32,
-    screen_height: u32) -> Rect {
-    let wr = rect_width as f32 / cons_width as f32;
-    let hr = rect_height as f32 / cons_height as f32;
-
-    let (w, h) = if wr > 1f32 || hr > 1f32 {
-        if wr > hr {
-            println!("Scaling down! The text will look worse!");
-            let h = (rect_height as f32 / wr) as i32;
-            (cons_width as i32, h)
-        } else {
-            println!("Scaling down! The text will look worse!");
-            let w = (rect_width as f32 / hr) as i32;
-            (w, cons_height as i32)
-        }
-    } else {
-        (rect_width as i32, rect_height as i32)
-    };
-
-    let cx = (screen_width as i32 - w) / 2;
-    let cy = (screen_height as i32 - h) / 2;
-    rect!(cx, cy, w, h)
+fn get_text_rect(rect_width: u32, rect_height: u32) -> Rect {
+    rect!(0, 0, rect_width, rect_height)
 }

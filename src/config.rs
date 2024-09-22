@@ -3,6 +3,7 @@ use serde::Deserialize;
 #[derive(Clone, Deserialize)]
 pub struct Config {
     pub font_path: String,
+    pub font_size: u16,
     pub screen_width: u32,
     pub screen_height: u32,
 }
@@ -16,6 +17,7 @@ impl Config {
 
         Config {
             font_path: String::from("fonts/Arial-Unicode.ttf"),
+            font_size: 16,
             screen_width: 800,
             screen_height: 600,
         }
@@ -32,7 +34,7 @@ pub fn search_for_config_paths() -> Option<String> {
     let mut paths = Vec::new();
     paths.push(String::from("config.toml"));
     paths.push(String::from("~/.config/mtty/config.toml"));
-    
+
     for path in paths {
         if std::path::Path::new(&path).exists() {
             return Some(path);
