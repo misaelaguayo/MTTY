@@ -1,7 +1,9 @@
 extern crate sdl2;
 
 mod animal;
+pub mod backend;
 mod config;
+pub mod frontend;
 mod term;
 
 fn main() -> Result<(), String> {
