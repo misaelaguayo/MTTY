@@ -1,27 +1,35 @@
+use std::sync::{Arc, Mutex};
+
+use async_trait::async_trait;
+
+use crate::{commands::read_command, term::State};
+
+#[async_trait]
 pub trait Backend {
-    fn execute(&mut self, command: String);
+    async fn execute(&mut self, command: String);
 }
 
 pub struct AsyncBackend {
-    commands: State,
+    state: Arc<Mutex<State>>,
 }
 
+#[async_trait]
 impl Backend for AsyncBackend {
-    fn execute(&mut self, command: String) {
-        self.commands.commands.push(command);
+    async fn execute(&mut self, command: String) {
+        let mut state = self.state.lock().unwrap();
+        let mut new_commands = state.commands.clone();
+        new_commands.push(command.clone());
+        let new_output = read_command(command);
+
+        *state = State {
+            commands: new_commands,
+            last_output: new_output.unwrap(),
+        };
     }
 }
 
 impl AsyncBackend {
-    pub fn new() -> Self {
-        Self {
-            commands: State {
-                commands: Vec::new(),
-            },
-        }
+    pub fn build(state: Arc<Mutex<State>>) -> Self {
+        Self { state }
     }
-}
-
-pub struct State {
-    commands: Vec<String>,
 }

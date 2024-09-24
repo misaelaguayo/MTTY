@@ -1,10 +1,12 @@
 use crate::config::Config;
+use crate::term::State;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use sdl2::render::TextureQuery;
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 
 // handle the annoying Rect i32
 macro_rules! rect(
@@ -23,10 +25,11 @@ pub struct Sdl2TerminalFrontend {
     pub buffer: Vec<String>,
     pub canvas: sdl2::render::Canvas<sdl2::video::Window>,
     pub sdl_context: sdl2::Sdl,
+    pub state: Arc<Mutex<State>>,
 }
 
 impl Sdl2TerminalFrontend {
-    pub fn build(config: Config) -> Sdl2TerminalFrontend {
+    pub fn build(config: Config, state: Arc<Mutex<State>>) -> Sdl2TerminalFrontend {
         let sdl_context = sdl2::init().unwrap();
         let video_subsys = sdl_context.video().unwrap();
         let window = video_subsys
@@ -45,6 +48,7 @@ impl Sdl2TerminalFrontend {
             sdl_context,
             buffer: Vec::new(),
             config,
+            state,
         }
     }
 }

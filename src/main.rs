@@ -2,6 +2,7 @@ extern crate sdl2;
 
 mod animal;
 pub mod backend;
+mod commands;
 mod config;
 pub mod frontend;
 mod term;

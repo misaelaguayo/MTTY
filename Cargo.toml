@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+async-trait = "0.1.83"
 serde = { version = "1.0.210", features = ["derive"] }
 serde_toml = "0.0.1"
 toml = "0.8.19"
