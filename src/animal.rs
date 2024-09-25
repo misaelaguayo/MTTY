@@ -1,3 +1,5 @@
+use std::thread;
+
 struct Sheep {
     speech: String,
 }
@@ -42,6 +44,17 @@ impl Animal for Cow {
     fn speech(&mut self, words: String) {
         self.speech = words;
     }
+}
+
+pub fn sheep_creator(){
+    let mut sheep = Box::new(Sheep::new());
+    animal_speak(sheep, String::from("baaaah!"));
+}
+
+pub fn animal_speak(animal: &'static mut Box<dyn Animal + Send>, words: String) {
+    thread::spawn(move || {
+        animal.speech(words);
+    });
 }
 
 pub fn random_animal(random_number: f64) -> Box<dyn Animal> {
