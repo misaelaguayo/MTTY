@@ -1,12 +1,11 @@
 use crate::config::Config;
-use crate::term::State;
+use crossbeam::channel::{Receiver, Sender};
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use sdl2::render::TextureQuery;
 use std::path::Path;
-use std::sync::{Arc, Mutex};
 
 // handle the annoying Rect i32
 macro_rules! rect(
@@ -25,11 +24,16 @@ pub struct Sdl2TerminalFrontend {
     pub buffer: Vec<String>,
     pub canvas: sdl2::render::Canvas<sdl2::video::Window>,
     pub sdl_context: sdl2::Sdl,
-    pub state: Arc<Mutex<State>>,
+    pub receiver: Receiver<Vec<String>>,
+    pub sender: Sender<Vec<String>>,
 }
 
 impl Sdl2TerminalFrontend {
-    pub fn build(config: Config, state: Arc<Mutex<State>>) -> Sdl2TerminalFrontend {
+    pub fn build(
+        config: Config,
+        sender: Sender<Vec<String>>,
+        receiver: Receiver<Vec<String>>,
+    ) -> Sdl2TerminalFrontend {
         let sdl_context = sdl2::init().unwrap();
         let video_subsys = sdl_context.video().unwrap();
         let window = video_subsys
@@ -48,7 +52,8 @@ impl Sdl2TerminalFrontend {
             sdl_context,
             buffer: Vec::new(),
             config,
-            state,
+            sender,
+            receiver,
         }
     }
 }
@@ -59,6 +64,12 @@ impl Frontend for Sdl2TerminalFrontend {
             if self.buffer.len() > 0 {
                 self.buffer.pop();
             }
+            return;
+        }
+        if text == "Return" {
+            let command = vec![self.buffer.join("")];
+            self.sender.send(command).unwrap();
+            self.buffer.clear();
             return;
         }
         self.buffer.push(text.to_string());
@@ -73,13 +84,26 @@ impl Frontend for Sdl2TerminalFrontend {
         font.set_style(sdl2::ttf::FontStyle::NORMAL);
         self.canvas.set_draw_color(Color::RGBA(0, 0, 0, 255));
 
-        self.buffer.push(">: ".to_string());
         let mut event_pump = self.sdl_context.event_pump().unwrap();
         'mainloop: loop {
             for event in event_pump.poll_iter() {
+                let response = self.receiver.try_recv();
+
+                if let Ok(response) = response {
+                    for line in response {
+                        self.buffer.push(line);
+                    }
+                }
+
                 let buffer_string = self.buffer.join("");
+                let rendered_text = if buffer_string.is_empty() {
+                    ">: ".to_string()
+                } else {
+                    format!(">: {}", buffer_string)
+                };
+                
                 let surface = font
-                    .render(&buffer_string)
+                    .render(rendered_text.as_str())
                     .blended_wrapped(Color::RGBA(255, 255, 255, 255), config.screen_width)
                     .map_err(|e| e.to_string())
                     .unwrap();

@@ -15,11 +15,11 @@ pub fn ls_command() -> Result<Vec<String>, std::io::Error> {
 }
 
 pub fn read_command(command: String) -> Result<Vec<String>, std::io::Error> {
-    match command.as_str() {
+    match command.to_lowercase().as_str() {
         "ls" => {
             let files = ls_command()?;
             Ok(files)
         }
-        _ => Ok(vec!["Command not found".to_string()]),
+        _ => Ok(vec![format!("Unknown command: {}", command)]),
     }
 }
