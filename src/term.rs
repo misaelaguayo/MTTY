@@ -11,7 +11,7 @@ pub struct State {
 }
 
 pub struct Terminal {
-    pub frontend: Box<dyn Frontend + Send>,
+    pub frontend: Box<dyn Frontend>,
     pub backend: Box<dyn Backend + Send>,
     pub state: Arc<Mutex<State>>,
 }
@@ -24,7 +24,7 @@ impl Terminal {
         }));
 
         Terminal {
-            frontend: Sender<Box::new(Sdl2TerminalFrontend::build(config, state.clone())),
+            frontend: Box::new(Sdl2TerminalFrontend::build(config, state.clone())),
             backend: Box::new(AsyncBackend::build(state.clone())),
             state,
         }
@@ -32,10 +32,9 @@ impl Terminal {
 
     pub fn run(mut self) {
         self.frontend.poll_event();
-        self.backend.execute("ls".to_string());
 
-        thread::spawn(move || {
-            self.backend;
+        thread::spawn(|| async move {
+            self.backend.execute("ls".to_string()).await;
         });
 
     }
