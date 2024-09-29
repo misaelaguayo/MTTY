@@ -1,7 +1,7 @@
 use crossbeam::channel::{Receiver, Sender};
 use dyn_clone::DynClone;
 
-use crate::commands::read_command;
+use crate::{commands::read_command, term::Command};
 
 pub trait Backend: DynClone {
     fn execute(&mut self);
@@ -9,27 +9,32 @@ pub trait Backend: DynClone {
 
 #[derive(Clone)]
 pub struct AsyncBackend {
-    pub sender: Sender<Vec<String>>,
-    pub receiver: Receiver<Vec<String>>,
+    pub sender: Sender<Command>,
+    pub receiver: Receiver<Command>,
 }
 
 impl Backend for AsyncBackend {
     fn execute(&mut self) {
         loop {
-            let commands = self.receiver.try_recv();
-            if let Ok(commands) = commands {
-                for command in commands {
-                    println!("Received command: {}", command);
-                    let output = read_command(command).unwrap();
-                    self.sender.send(output).unwrap();
-                }
+            let command = self.receiver.try_recv();
+            if let Ok(command) = command {
+                println!("Received command: {}", command.command);
+                let output = read_command(command.command.to_string()).unwrap();
+                self.sender
+                    .send(Command {
+                        id: command.id,
+                        command: command.command,
+                        args: command.args,
+                        response: output,
+                    })
+                    .unwrap();
             }
         }
     }
 }
 
 impl AsyncBackend {
-    pub fn build(sender: Sender<Vec<String>>, receiver: Receiver<Vec<String>>) -> Self {
+    pub fn build(sender: Sender<Command>, receiver: Receiver<Command>) -> Self {
         Self { sender, receiver }
     }
 }

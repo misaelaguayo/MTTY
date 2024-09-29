@@ -1,4 +1,5 @@
 use crossbeam::channel::{unbounded, Receiver, Sender};
+use uuid::Uuid;
 
 use crate::backend::{AsyncBackend, Backend};
 use crate::config::Config;
@@ -9,11 +10,18 @@ pub struct Terminal {
     pub backend: Box<dyn Backend + Send>,
 }
 
+#[derive(Clone)]
+pub struct Command {
+    pub id: Uuid,
+    pub command: String,
+    pub args: Vec<String>,
+    pub response: Vec<String>,
+}
+
 impl Terminal {
     pub fn build(config: Config) -> Terminal {
-        let (backend_sender, backend_receiver): (Sender<Vec<String>>, Receiver<Vec<String>>) =
-            unbounded();
-        let (frontend_sender, frontend_receiver): (Sender<Vec<String>>, Receiver<Vec<String>>) =
+        let (backend_sender, backend_receiver): (Sender<Command>, Receiver<Command>) = unbounded();
+        let (frontend_sender, frontend_receiver): (Sender<Command>, Receiver<Command>) =
             unbounded();
 
         let backend = Box::new(AsyncBackend::build(backend_sender, frontend_receiver));

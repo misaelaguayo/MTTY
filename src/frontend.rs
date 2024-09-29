@@ -1,4 +1,5 @@
 use crate::config::Config;
+use crate::term::Command;
 use crossbeam::channel::{Receiver, Sender};
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
@@ -6,6 +7,7 @@ use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use sdl2::render::TextureQuery;
 use std::path::Path;
+use uuid::Uuid;
 
 // handle the annoying Rect i32
 macro_rules! rect(
@@ -22,18 +24,21 @@ pub trait Frontend {
 pub struct Sdl2TerminalFrontend {
     pub config: Config,
     pub buffer: Vec<String>,
+    // TODO: change to a hashmap
+    pub history: Vec<Command>,
     pub canvas: sdl2::render::Canvas<sdl2::video::Window>,
     pub sdl_context: sdl2::Sdl,
-    pub receiver: Receiver<Vec<String>>,
-    pub sender: Sender<Vec<String>>,
+    pub receiver: Receiver<Command>,
+    pub sender: Sender<Command>,
 }
 
 impl Sdl2TerminalFrontend {
     pub fn build(
         config: Config,
-        sender: Sender<Vec<String>>,
-        receiver: Receiver<Vec<String>>,
+        sender: Sender<Command>,
+        receiver: Receiver<Command>,
     ) -> Sdl2TerminalFrontend {
+        let history: Vec<Command> = Vec::new();
         let sdl_context = sdl2::init().unwrap();
         let video_subsys = sdl_context.video().unwrap();
         let window = video_subsys
@@ -54,6 +59,7 @@ impl Sdl2TerminalFrontend {
             config,
             sender,
             receiver,
+            history,
         }
     }
 }
@@ -66,12 +72,22 @@ impl Frontend for Sdl2TerminalFrontend {
             }
             return;
         }
+
         if text == "Return" {
-            let command = vec![self.buffer.join("")];
-            self.sender.send(command).unwrap();
+            let command = Command {
+                id: Uuid::new_v4(),
+                command: self.buffer.join(""),
+                args: vec![], // TODO: parse args from command
+                response: Vec::new(),
+            };
+
             self.buffer.clear();
+            self.sender.send(command.clone()).unwrap();
+            self.history.push(command);
+
             return;
         }
+
         self.buffer.push(text.to_string());
     }
 
@@ -90,18 +106,27 @@ impl Frontend for Sdl2TerminalFrontend {
                 let response = self.receiver.try_recv();
 
                 if let Ok(response) = response {
-                    for line in response {
-                        self.buffer.push(line);
+                    let index = self
+                        .history
+                        .iter()
+                        .position(|x| x.id == response.id)
+                        .unwrap();
+                    self.history[index].response = response.response;
+                }
+
+                let mut history_text = "".to_string();
+                for command in self.history.iter() {
+                    history_text.push_str(command.command.as_str());
+                    history_text.push_str("\n");
+                    for response in command.response.iter() {
+                        history_text.push_str(response.as_str());
+                        history_text.push_str("\n");
                     }
                 }
 
                 let buffer_string = self.buffer.join("");
-                let rendered_text = if buffer_string.is_empty() {
-                    ">: ".to_string()
-                } else {
-                    format!(">: {}", buffer_string)
-                };
-                
+                let rendered_text = format!("{}>: {}", history_text, buffer_string);
+
                 let surface = font
                     .render(rendered_text.as_str())
                     .blended_wrapped(Color::RGBA(255, 255, 255, 255), config.screen_width)
