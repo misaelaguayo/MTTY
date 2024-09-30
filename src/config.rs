@@ -2,7 +2,7 @@ use serde::Deserialize;
 
 #[derive(Clone, Deserialize)]
 pub struct Config {
-    pub font_path: String,
+    pub font: String,
     pub font_size: u16,
     pub screen_width: u32,
     pub screen_height: u32,
@@ -16,7 +16,7 @@ impl Config {
         }
 
         Config {
-            font_path: String::from("fonts/Arial-Unicode.ttf"),
+            font: String::from("Times New Roman"),
             font_size: 16,
             screen_width: 800,
             screen_height: 600,

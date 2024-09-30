@@ -1,4 +1,4 @@
-font_path = "fonts/Arial-Unicode.ttf"
+font = "Hack Nerd Font Mono"
 font_size = 16
 screen_width = 800
 screen_height = 600
