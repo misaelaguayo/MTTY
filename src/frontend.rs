@@ -6,10 +6,11 @@ use crossbeam::channel::{Receiver, Sender};
 use font_kit::handle::Handle;
 use font_kit::source::SystemSource;
 use sdl2::event::Event;
-use sdl2::keyboard::Keycode;
+use sdl2::keyboard::{Keycode, Scancode};
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use sdl2::render::TextureQuery;
+use sdl2::VideoSubsystem;
 use uuid::Uuid;
 
 // handle the annoying Rect i32
@@ -26,13 +27,14 @@ pub trait Frontend {
 
 pub struct Sdl2TerminalFrontend {
     pub config: Config,
-    pub buffer: Vec<String>,
+    pub buffer: Vec<char>,
     // TODO: change to a hashmap
     pub history: Vec<Command>,
     pub canvas: sdl2::render::Canvas<sdl2::video::Window>,
     pub sdl_context: sdl2::Sdl,
     pub receiver: Receiver<Command>,
     pub sender: Sender<Command>,
+    pub video_subsys: VideoSubsystem,
 }
 
 impl Sdl2TerminalFrontend {
@@ -64,6 +66,7 @@ impl Sdl2TerminalFrontend {
             sender,
             receiver,
             history,
+            video_subsys,
         }
     }
 }
@@ -80,7 +83,7 @@ impl Frontend for Sdl2TerminalFrontend {
         if text == "Return" {
             let command = Command {
                 id: Uuid::new_v4(),
-                command: self.buffer.join(""),
+                command: self.buffer.iter().collect(),
                 args: vec![], // TODO: parse args from command
                 response: Vec::new(),
             };
@@ -92,7 +95,9 @@ impl Frontend for Sdl2TerminalFrontend {
             return;
         }
 
-        self.buffer.push(text.to_string());
+        for c in text.chars() {
+            self.buffer.push(c);
+        }
     }
 
     fn poll_event(&mut self) {
@@ -131,7 +136,7 @@ impl Frontend for Sdl2TerminalFrontend {
 
         let mut event_pump = self.sdl_context.event_pump().unwrap();
         'mainloop: loop {
-            for event in event_pump.poll_iter() {
+            for event in event_pump.poll_iter().collect::<Vec<Event>>() {
                 let response = self.receiver.try_recv();
 
                 if let Ok(response) = response {
@@ -153,7 +158,7 @@ impl Frontend for Sdl2TerminalFrontend {
                     }
                 }
 
-                let buffer_string = self.buffer.join("");
+                let buffer_string = self.buffer.iter().collect::<String>();
                 let rendered_text = format!("{}>: {}", history_text, buffer_string);
 
                 let surface = font
@@ -182,23 +187,21 @@ impl Frontend for Sdl2TerminalFrontend {
                     }
                     | Event::Quit { .. } => break 'mainloop,
                     Event::KeyDown { keycode, .. } => {
-                        keycode.map(|keycode| {
-                            let key = keycode.to_string();
-                            match key.as_str() {
-                                "Escape" => {
-                                    self.r#type("Escape");
-                                }
-                                "Return" => {
-                                    self.r#type("Return");
-                                }
-                                "Backspace" => {
-                                    self.r#type("Backspace");
-                                }
-                                _ => {
-                                    self.r#type(&key);
-                                }
-                            }
-                        });
+                        let key_state = event_pump.keyboard_state();
+
+                        if key_state.is_scancode_pressed(Scancode::LGui)
+                            && key_state.is_scancode_pressed(Scancode::V)
+                        {
+                            let text = &self.video_subsys.clipboard().clipboard_text().unwrap();
+                            self.r#type(text.as_str());
+                        } else if key_state.is_scancode_pressed(Scancode::Backspace) {
+                            self.r#type("Backspace");
+                        } else if key_state.is_scancode_pressed(Scancode::LCtrl)
+                            || key_state.is_scancode_pressed(Scancode::LGui)
+                        {
+                        } else {
+                            self.r#type(keycode.unwrap().to_string().as_str());
+                        }
                     }
                     _ => {}
                 }
