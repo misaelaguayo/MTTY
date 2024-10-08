@@ -44,12 +44,13 @@ impl Sdl2TerminalFrontend {
         let history: Vec<Command> = Vec::new();
         let sdl_context = sdl2::init().unwrap();
         let video_subsys = sdl_context.video().unwrap();
-        let window = video_subsys
+        let mut window = video_subsys
             .window("MTTY", config.screen_width, config.screen_height)
             .position_centered()
             .opengl()
             .build()
             .unwrap();
+        window.set_opacity(config.transparency).unwrap();
         let canvas = window
             .into_canvas()
             .build()

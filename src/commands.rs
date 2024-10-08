@@ -1,7 +1,5 @@
 use std::env;
 
-use serde::de::Error;
-
 use crate::term::Command;
 
 pub fn ls() -> Result<Vec<String>, std::io::Error> {

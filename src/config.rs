@@ -6,6 +6,7 @@ pub struct Config {
     pub font_size: u16,
     pub screen_width: u32,
     pub screen_height: u32,
+    pub transparency: f32,
 }
 
 impl Config {
@@ -20,6 +21,7 @@ impl Config {
             font_size: 16,
             screen_width: 800,
             screen_height: 600,
+            transparency: 1.0,
         }
     }
 
