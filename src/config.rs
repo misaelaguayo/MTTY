@@ -16,6 +16,9 @@ impl Config {
             return Config::from_path(&path);
         }
 
+        #[cfg(debug_assertions)]
+        println!("No config file found, using default values");
+
         Config {
             font: String::from("Times New Roman"),
             font_size: 16,
@@ -33,9 +36,11 @@ impl Config {
 }
 
 pub fn search_for_config_paths() -> Option<String> {
+    let home = std::env::var("HOME").unwrap();
+
     let mut paths = Vec::new();
     paths.push(String::from("config.toml"));
-    paths.push(String::from("~/.config/mtty/config.toml"));
+    paths.push(String::from(format!("{home}/.config/mtty/config.toml")));
 
     for path in paths {
         if std::path::Path::new(&path).exists() {
