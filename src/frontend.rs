@@ -1,5 +1,3 @@
-use std::os::unix::fs::FileExt;
-
 use crate::config::Config;
 use crate::term::Command;
 use crossbeam::channel::{Receiver, Sender};
@@ -10,7 +8,7 @@ use sdl2::keyboard::{Keycode, Scancode};
 use sdl2::pixels::Color;
 use sdl2::rect::Rect;
 use sdl2::render::TextureQuery;
-use sdl2::VideoSubsystem;
+use sdl2::{rwops, VideoSubsystem};
 use uuid::Uuid;
 
 // handle the annoying Rect i32
@@ -111,23 +109,16 @@ impl Frontend for Sdl2TerminalFrontend {
             .select_family_by_name(&config.font)
             .unwrap();
 
-        let mut font_path = String::new();
+        let mut rwops = rwops::RWops::from_bytes(&[]);
 
         for font in font_family.fonts() {
             match font {
                 Handle::Path { path, .. } => {
-                    font_path = path.to_str().unwrap().to_string();
+                    rwops = Ok(rwops::RWops::from_file(path, "r").unwrap());
                     break;
                 }
                 Handle::Memory { bytes, .. } => {
-                    let tmp_dir = std::env::temp_dir();
-                    let file = std::fs::OpenOptions::new()
-                        .write(true)
-                        .create(true)
-                        .open(tmp_dir.join("temp.ttf"))
-                        .unwrap();
-                    file.write_at(&bytes, 0).unwrap();
-                    font_path = tmp_dir.join("temp.ttf").to_str().unwrap().to_string();
+                    rwops = rwops::RWops::from_bytes(&bytes);
                     break;
                 }
             }
@@ -135,7 +126,7 @@ impl Frontend for Sdl2TerminalFrontend {
 
         let binding = sdl2::ttf::init().unwrap();
         let texture_creator = self.canvas.texture_creator();
-        let mut font = binding.load_font(font_path, config.font_size).unwrap();
+        let mut font = binding.load_font_from_rwops(rwops.unwrap(), config.font_size).unwrap();
         font.set_style(sdl2::ttf::FontStyle::NORMAL);
         font.set_kerning(true);
         self.canvas.set_draw_color(Color::RGBA(0, 0, 0, 255));
