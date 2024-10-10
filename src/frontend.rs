@@ -21,7 +21,7 @@ macro_rules! rect(
 );
 
 pub trait Frontend {
-    fn r#type(&mut self, text: &str);
+    fn r#type(&mut self, text: String);
     fn poll_event(&mut self);
 }
 
@@ -72,7 +72,7 @@ impl Sdl2TerminalFrontend {
 }
 
 impl Frontend for Sdl2TerminalFrontend {
-    fn r#type(&mut self, text: &str) {
+    fn r#type(&mut self, text: String) {
         if text == "Backspace" {
             if self.buffer.len() > 0 {
                 self.buffer.pop();
@@ -137,6 +137,7 @@ impl Frontend for Sdl2TerminalFrontend {
         let texture_creator = self.canvas.texture_creator();
         let mut font = binding.load_font(font_path, config.font_size).unwrap();
         font.set_style(sdl2::ttf::FontStyle::NORMAL);
+        font.set_kerning(true);
         self.canvas.set_draw_color(Color::RGBA(0, 0, 0, 255));
 
         let mut event_pump = self.sdl_context.event_pump().unwrap();
@@ -198,12 +199,12 @@ impl Frontend for Sdl2TerminalFrontend {
                             && key_state.is_scancode_pressed(Scancode::V)
                         {
                             let text = &self.video_subsys.clipboard().clipboard_text().unwrap();
-                            self.r#type(text.as_str());
+                            self.r#type(text.to_string());
                         } else if key_state.is_scancode_pressed(Scancode::LCtrl)
                             || key_state.is_scancode_pressed(Scancode::LGui)
                         {
                         } else {
-                            self.r#type(keycode.unwrap().to_string().as_str());
+                            self.r#type(keycode.unwrap().to_string());
                         }
                     }
                     _ => {}
