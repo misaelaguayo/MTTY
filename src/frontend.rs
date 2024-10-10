@@ -80,6 +80,11 @@ impl Frontend for Sdl2TerminalFrontend {
             return;
         }
 
+        if text == "Space" {
+            self.buffer.push(' ');
+            return;
+        }
+
         if text == "Return" {
             let command = Command {
                 id: Uuid::new_v4(),
@@ -194,8 +199,6 @@ impl Frontend for Sdl2TerminalFrontend {
                         {
                             let text = &self.video_subsys.clipboard().clipboard_text().unwrap();
                             self.r#type(text.as_str());
-                        } else if key_state.is_scancode_pressed(Scancode::Backspace) {
-                            self.r#type("Backspace");
                         } else if key_state.is_scancode_pressed(Scancode::LCtrl)
                             || key_state.is_scancode_pressed(Scancode::LGui)
                         {
