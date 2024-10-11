@@ -208,9 +208,24 @@ impl Frontend for Sdl2TerminalFrontend {
                         {
                             let text = &self.video_subsys.clipboard().clipboard_text().unwrap();
                             self.r#type(&text);
-                        } else if key_state.is_scancode_pressed(Scancode::LCtrl)
+                        }
+                        // do nothing for special keys
+                        else if key_state.is_scancode_pressed(Scancode::LCtrl)
                             || key_state.is_scancode_pressed(Scancode::LGui)
+                            || key_state.is_scancode_pressed(Scancode::LAlt)
+                            || key_state.is_scancode_pressed(Scancode::RAlt)
+                            || key_state.is_scancode_pressed(Scancode::RGui)
+                            || key_state.is_scancode_pressed(Scancode::RCtrl)
+                            || key_state.is_scancode_pressed(Scancode::CapsLock)
+                            || key_state.is_scancode_pressed(Scancode::NumLockClear)
+                            || key_state.is_scancode_pressed(Scancode::ScrollLock)
                         {
+                        } else if key_state.is_scancode_pressed(Scancode::LShift)
+                            || key_state.is_scancode_pressed(Scancode::RShift)
+                        {
+                            if key_state.is_scancode_pressed(Scancode::Minus) {
+                                self.r#type("_");
+                            }
                         } else {
                             self.r#type(&keycode.unwrap().to_string());
                         }
