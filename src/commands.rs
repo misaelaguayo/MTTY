@@ -57,6 +57,16 @@ pub fn read_command(command: Command) -> Result<Vec<String>, std::io::Error> {
             let username = whoami()?;
             Ok(vec![username])
         }
-        _ => Ok(vec![format!("Unknown command: {}", command.command)]),
+        _ => {
+            let output = std::process::Command::new(command.command)
+                .args(command.args)
+                .output()
+                .expect("failed to execute process");
+
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+
+            Ok(vec![stdout.to_string(), stderr.to_string()])
+        }
     }
 }

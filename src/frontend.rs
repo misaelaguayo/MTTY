@@ -87,10 +87,16 @@ impl Frontend for Sdl2TerminalFrontend {
                 return;
             }
             "Return" => {
+                let complete_command = self.buffer.iter().collect::<String>();
+
+                let mut split = complete_command.split_whitespace();
+                let c = split.next().unwrap();
+                let args = split.collect::<Vec<&str>>();
+
                 let command = Command {
                     id: Uuid::new_v4(),
-                    command: self.buffer.iter().collect(),
-                    args: vec![], // TODO: parse args from command
+                    command: c.to_string(),
+                    args: args.iter().map(|x| x.to_string()).collect(),
                     response: Vec::new(),
                 };
 
@@ -142,6 +148,7 @@ impl Frontend for Sdl2TerminalFrontend {
             .sdl_context
             .event_pump()
             .expect("Failed to get event pump");
+
         'mainloop: loop {
             for event in event_pump.poll_iter().collect::<Vec<Event>>() {
                 let response = self.receiver.try_recv();
