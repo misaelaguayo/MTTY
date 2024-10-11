@@ -1,6 +1,5 @@
 use std::thread;
-
-use font_kit::source::SystemSource;
+// use font_kit::source::SystemSource;
 
 extern crate sdl2;
 
@@ -28,9 +27,9 @@ fn main() -> Result<(), String> {
 // a test function used to test random stuff
 fn test() {
     // print all available font families
-    let system_source = SystemSource::new();
-    let families = system_source.all_families().unwrap();
-    for family in families {
-        println!("{}", family);
-    }
+    // let system_source = SystemSource::new();
+    // let families = system_source.all_families().unwrap();
+    // for family in families {
+    //     println!("{}", family);
+    // }
 }
