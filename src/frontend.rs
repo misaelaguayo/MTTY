@@ -19,7 +19,7 @@ macro_rules! rect(
 );
 
 pub trait Frontend {
-    fn r#type(&mut self, text: String);
+    fn r#type(&mut self, text: &str);
     fn poll_event(&mut self);
 }
 
@@ -74,36 +74,37 @@ impl Sdl2TerminalFrontend {
 }
 
 impl Frontend for Sdl2TerminalFrontend {
-    fn r#type(&mut self, text: String) {
-        if text == "Backspace" {
-            if self.buffer.len() > 0 {
-                self.buffer.pop();
+    fn r#type(&mut self, text: &str) {
+        match text {
+            "Backspace" => {
+                if self.buffer.len() > 0 {
+                    self.buffer.pop();
+                }
+                return;
             }
-            return;
-        }
+            "Space" => {
+                self.buffer.push(' ');
+                return;
+            }
+            "Return" => {
+                let command = Command {
+                    id: Uuid::new_v4(),
+                    command: self.buffer.iter().collect(),
+                    args: vec![], // TODO: parse args from command
+                    response: Vec::new(),
+                };
 
-        if text == "Space" {
-            self.buffer.push(' ');
-            return;
-        }
+                self.buffer.clear();
+                if let Err(e) = self.sender.send(command.clone()) {
+                    println!("Error sending command: {}", e);
+                }
+                self.history.push(command);
 
-        if text == "Return" {
-            let command = Command {
-                id: Uuid::new_v4(),
-                command: self.buffer.iter().collect(),
-                args: vec![], // TODO: parse args from command
-                response: Vec::new(),
-            };
-
-            self.buffer.clear();
-            self.sender.send(command.clone()).unwrap();
-            self.history.push(command);
-
-            return;
-        }
-
-        for c in text.chars() {
-            self.buffer.push(c);
+                return;
+            }
+            _ => {
+                self.buffer.push(text.chars().next().unwrap());
+            }
         }
     }
 
@@ -111,7 +112,7 @@ impl Frontend for Sdl2TerminalFrontend {
         let config = &self.config.clone();
         let font_family = SystemSource::new()
             .select_family_by_name(&config.font)
-            .unwrap();
+            .expect("Font not found");
 
         let mut rwops = rwops::RWops::from_bytes(&[]);
 
@@ -128,14 +129,19 @@ impl Frontend for Sdl2TerminalFrontend {
             }
         }
 
-        let binding = sdl2::ttf::init().unwrap();
+        let binding = sdl2::ttf::init().expect("Failed to initialize TTF context");
         let texture_creator = self.canvas.texture_creator();
-        let mut font = binding.load_font_from_rwops(rwops.unwrap(), config.font_size).unwrap();
+        let mut font = binding
+            .load_font_from_rwops(rwops.unwrap(), config.font_size)
+            .expect("Failed to load font");
         font.set_style(sdl2::ttf::FontStyle::NORMAL);
         font.set_kerning(true);
         self.canvas.set_draw_color(Color::RGBA(0, 0, 0, 255));
 
-        let mut event_pump = self.sdl_context.event_pump().unwrap();
+        let mut event_pump = self
+            .sdl_context
+            .event_pump()
+            .expect("Failed to get event pump");
         'mainloop: loop {
             for event in event_pump.poll_iter().collect::<Vec<Event>>() {
                 let response = self.receiver.try_recv();
@@ -194,12 +200,12 @@ impl Frontend for Sdl2TerminalFrontend {
                             && key_state.is_scancode_pressed(Scancode::V)
                         {
                             let text = &self.video_subsys.clipboard().clipboard_text().unwrap();
-                            self.r#type(text.to_string());
+                            self.r#type(&text);
                         } else if key_state.is_scancode_pressed(Scancode::LCtrl)
                             || key_state.is_scancode_pressed(Scancode::LGui)
                         {
                         } else {
-                            self.r#type(keycode.unwrap().to_string());
+                            self.r#type(&keycode.unwrap().to_string());
                         }
                     }
                     _ => {}
