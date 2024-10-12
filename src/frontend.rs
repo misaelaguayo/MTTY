@@ -226,8 +226,15 @@ impl Frontend for Sdl2TerminalFrontend {
                             if key_state.is_scancode_pressed(Scancode::Minus) {
                                 self.r#type("_");
                             }
-                        } else {
-                            self.r#type(&keycode.unwrap().to_string());
+                        } else if key_state.is_scancode_pressed(Scancode::Space) {
+                            self.r#type("Space");
+                        } else if key_state.is_scancode_pressed(Scancode::Return) {
+                            self.r#type("Return");
+                        } else if key_state.is_scancode_pressed(Scancode::Backspace) {
+                            self.r#type("Backspace");
+                        }
+                        else {
+                            self.r#type(&keycode.unwrap().to_string().to_lowercase());
                         }
                     }
                     _ => {}
