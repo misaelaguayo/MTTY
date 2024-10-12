@@ -118,7 +118,7 @@ impl Frontend for Sdl2TerminalFrontend {
         let config = &self.config.clone();
         let font_family = SystemSource::new()
             .select_family_by_name(&config.font)
-            .expect("Font not found");
+            .expect(&format!("Font `{}` not found", &config.font));
 
         let mut rwops = rwops::RWops::from_bytes(&[]);
 

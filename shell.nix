@@ -5,6 +5,7 @@ let
 in
 
 pkgs.mkShellNoCC {
+  nativeBuildInputs = with pkgs.buildPackages; [ pkg-config fontconfig ];
   shellHook = ''
     export LIBRARY_PATH="${pkgs.lib.makeLibraryPath libraries}"
   '';
