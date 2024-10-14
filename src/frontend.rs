@@ -33,6 +33,7 @@ pub struct Sdl2TerminalFrontend {
     pub receiver: Receiver<Command>,
     pub sender: Sender<Command>,
     pub video_subsys: VideoSubsystem,
+    pub offset: u32,
 }
 
 impl Sdl2TerminalFrontend {
@@ -69,6 +70,7 @@ impl Sdl2TerminalFrontend {
             receiver,
             history,
             video_subsys,
+            offset: 0,
         }
     }
 }
@@ -190,8 +192,22 @@ impl Frontend for Sdl2TerminalFrontend {
                 let TextureQuery { width, height, .. } = texture.query();
 
                 let target = get_text_rect(width, height);
+                let (current_screen_width, current_screen_height) = self.canvas.output_size().unwrap();
 
-                self.canvas.copy(&texture, None, Some(target)).unwrap();
+                if height > current_screen_height {
+                    self.offset = height - current_screen_height;
+                    let source = get_text_rect_from_offset(
+                        height,
+                        current_screen_width,
+                        current_screen_height,
+                        self.offset,
+                    );
+                    let target = get_text_rect(current_screen_width, current_screen_height);
+                    self.canvas.copy(&texture, Some(source), Some(target)).unwrap();
+                } else {
+                    self.canvas.copy(&texture, None, Some(target)).unwrap();
+                }
+
                 self.canvas.present();
 
                 match event {
@@ -246,4 +262,12 @@ impl Frontend for Sdl2TerminalFrontend {
 
 fn get_text_rect(rect_width: u32, rect_height: u32) -> Rect {
     rect!(0, 0, rect_width, rect_height)
+}
+
+fn get_text_rect_from_offset(text_height: u32, window_width: u32, window_height: u32, offset: u32) -> Rect {
+    if text_height > window_height {
+        rect!(0, offset, window_width, window_height + offset)
+    } else {
+        rect!(0, 0, window_width, text_height)
+    }
 }
