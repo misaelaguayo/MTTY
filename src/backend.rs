@@ -19,7 +19,13 @@ impl Backend for AsyncBackend {
             let command = self.receiver.try_recv();
             if let Ok(command) = command {
                 println!("Received command: {}", command.command);
-                let output = read_command(command.clone()).unwrap();
+                let output = match read_command(command.clone()) {
+                    Ok(output) => output,
+                    Err(e) => {
+                        println!("Error: {}", e.to_string());
+                        vec![e.to_string()]
+                    }
+                };
                 self.sender
                     .send(Command {
                         id: command.id,

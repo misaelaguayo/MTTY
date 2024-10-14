@@ -1,8 +1,8 @@
-use std::env;
+use std::{env, io::{Error, ErrorKind}};
 
 use crate::term::Command;
 
-pub fn ls() -> Result<Vec<String>, std::io::Error> {
+pub fn ls() -> Result<Vec<String>, Error> {
     let path = env::current_dir()?;
     let paths = std::fs::read_dir(path)?;
 
@@ -16,26 +16,26 @@ pub fn ls() -> Result<Vec<String>, std::io::Error> {
     Ok(files)
 }
 
-pub fn cd(path: String) -> Result<String, std::io::Error> {
+pub fn cd(path: String) -> Result<String, Error> {
     env::set_current_dir(path)?;
 
     Ok(env::current_dir()?.display().to_string())
 }
 
-pub fn pwd() -> Result<String, std::io::Error> {
+pub fn pwd() -> Result<String, Error> {
     Ok(env::current_dir()?.display().to_string())
 }
 
-pub fn whoami() -> Result<String, std::io::Error> {
+pub fn whoami() -> Result<String, Error> {
     let username = env::var("USER");
 
     match username {
         Ok(username) => Ok(username),
-        Err(e) => Err(std::io::Error::new(std::io::ErrorKind::Other, e)),
+        Err(e) => Err(Error::new(ErrorKind::Other, e)),
     }
 }
 
-pub fn read_command(command: Command) -> Result<Vec<String>, std::io::Error> {
+pub fn read_command(command: Command) -> Result<Vec<String>, Error> {
     match command.command.to_lowercase().as_str() {
         "ls" => {
             let files = ls()?;
@@ -58,10 +58,13 @@ pub fn read_command(command: Command) -> Result<Vec<String>, std::io::Error> {
             Ok(vec![username])
         }
         _ => {
-            let output = std::process::Command::new(command.command)
+            let output = match std::process::Command::new(command.command)
                 .args(command.args)
                 .output()
-                .expect("failed to execute process");
+            {
+                Ok(output) => output,
+                Err(e) => return Err(Error::new(ErrorKind::Other, e)),
+            };
 
             let stdout = String::from_utf8_lossy(&output.stdout);
             let stderr = String::from_utf8_lossy(&output.stderr);

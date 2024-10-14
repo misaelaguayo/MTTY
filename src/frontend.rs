@@ -192,7 +192,8 @@ impl Frontend for Sdl2TerminalFrontend {
                 let TextureQuery { width, height, .. } = texture.query();
 
                 let target = get_text_rect(width, height);
-                let (current_screen_width, current_screen_height) = self.canvas.output_size().unwrap();
+                let (current_screen_width, current_screen_height) =
+                    self.canvas.output_size().unwrap();
 
                 if height > current_screen_height {
                     self.offset = height - current_screen_height;
@@ -203,7 +204,9 @@ impl Frontend for Sdl2TerminalFrontend {
                         self.offset,
                     );
                     let target = get_text_rect(current_screen_width, current_screen_height);
-                    self.canvas.copy(&texture, Some(source), Some(target)).unwrap();
+                    self.canvas
+                        .copy(&texture, Some(source), Some(target))
+                        .unwrap();
                 } else {
                     self.canvas.copy(&texture, None, Some(target)).unwrap();
                 }
@@ -248,8 +251,7 @@ impl Frontend for Sdl2TerminalFrontend {
                             self.r#type("Return");
                         } else if key_state.is_scancode_pressed(Scancode::Backspace) {
                             self.r#type("Backspace");
-                        }
-                        else {
+                        } else {
                             self.r#type(&keycode.unwrap().to_string().to_lowercase());
                         }
                     }
@@ -264,7 +266,12 @@ fn get_text_rect(rect_width: u32, rect_height: u32) -> Rect {
     rect!(0, 0, rect_width, rect_height)
 }
 
-fn get_text_rect_from_offset(text_height: u32, window_width: u32, window_height: u32, offset: u32) -> Rect {
+fn get_text_rect_from_offset(
+    text_height: u32,
+    window_width: u32,
+    window_height: u32,
+    offset: u32,
+) -> Rect {
     if text_height > window_height {
         rect!(0, offset, window_width, window_height + offset)
     } else {
