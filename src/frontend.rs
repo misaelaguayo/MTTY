@@ -95,6 +95,13 @@ impl Frontend for Sdl2TerminalFrontend {
                 let c = split.next().unwrap();
                 let args = split.collect::<Vec<&str>>();
 
+                if c == "clear"
+                {
+                    self.history.clear();
+                    self.buffer.clear();
+                    return
+                }
+
                 let command = Command {
                     id: Uuid::new_v4(),
                     command: c.to_string(),
@@ -170,7 +177,6 @@ impl Frontend for Sdl2TerminalFrontend {
                     history_text.push_str("\n");
                     for response in command.response.iter() {
                         history_text.push_str(response.as_str());
-                        history_text.push_str("\n");
                     }
                 }
 
