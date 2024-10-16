@@ -20,7 +20,11 @@ impl Backend for AsyncBackend {
             if let Ok(command) = command {
                 println!("Received command: {}", command.command);
                 let output = match read_command(command.clone()) {
-                    Ok(output) => output,
+                    Ok(output) => {
+                        let stdout = String::from_utf8_lossy(&output);
+                        println!("Output: {}", stdout);
+                        vec![stdout.to_string()]
+                    }
                     Err(e) => {
                         println!("Error: {}", e.to_string());
                         vec![e.to_string()]
