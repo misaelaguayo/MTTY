@@ -1,3 +1,6 @@
+use std::thread;
+use std::time::Duration;
+
 use crate::config::Config;
 use crate::term::Command;
 use crossbeam::channel::{Receiver, Sender};
@@ -95,11 +98,10 @@ impl Frontend for Sdl2TerminalFrontend {
                 let c = split.next().unwrap();
                 let args = split.collect::<Vec<&str>>();
 
-                if c == "clear"
-                {
+                if c == "clear" {
                     self.history.clear();
                     self.buffer.clear();
-                    return
+                    return;
                 }
 
                 let command = Command {
@@ -159,66 +161,67 @@ impl Frontend for Sdl2TerminalFrontend {
             .expect("Failed to get event pump");
 
         'mainloop: loop {
+            let response = self.receiver.try_recv();
+
+            if let Ok(response) = response {
+                let index = self
+                    .history
+                    .iter()
+                    .position(|x| x.id == response.id)
+                    .unwrap();
+                let previous_response = self.history[index].response.clone();
+                let concatenated = previous_response.iter().chain(response.response.iter());
+                self.history[index].response = concatenated.map(|x| x.clone()).collect();
+            }
+
+            let mut history_text = "".to_string();
+            for command in self.history.iter() {
+                history_text.push_str(command.command.as_str());
+                history_text.push_str("\n");
+                for response in command.response.iter() {
+                    history_text.push_str(response.as_str());
+                }
+            }
+
+            let buffer_string = self.buffer.iter().collect::<String>();
+            let rendered_text = format!("{}>: {}", history_text, buffer_string);
+
+            let surface = font
+                .render(rendered_text.as_str())
+                .blended_wrapped(Color::RGBA(255, 255, 255, 255), config.screen_width)
+                .map_err(|e| e.to_string())
+                .unwrap();
+            let texture = texture_creator
+                .create_texture_from_surface(&surface)
+                .map_err(|e| e.to_string())
+                .unwrap();
+
+            self.canvas.clear();
+
+            let TextureQuery { width, height, .. } = texture.query();
+
+            let target = get_text_rect(width, height);
+            let (current_screen_width, current_screen_height) = self.canvas.output_size().unwrap();
+
+            if height > current_screen_height {
+                self.offset = height - current_screen_height;
+                let source = get_text_rect_from_offset(
+                    height,
+                    current_screen_width,
+                    current_screen_height,
+                    self.offset,
+                );
+                let target = get_text_rect(current_screen_width, current_screen_height);
+                self.canvas
+                    .copy(&texture, Some(source), Some(target))
+                    .unwrap();
+            } else {
+                self.canvas.copy(&texture, None, Some(target)).unwrap();
+            }
+
+            self.canvas.present();
+
             for event in event_pump.poll_iter().collect::<Vec<Event>>() {
-                let response = self.receiver.try_recv();
-
-                if let Ok(response) = response {
-                    let index = self
-                        .history
-                        .iter()
-                        .position(|x| x.id == response.id)
-                        .unwrap();
-                    self.history[index].response = response.response;
-                }
-
-                let mut history_text = "".to_string();
-                for command in self.history.iter() {
-                    history_text.push_str(command.command.as_str());
-                    history_text.push_str("\n");
-                    for response in command.response.iter() {
-                        history_text.push_str(response.as_str());
-                    }
-                }
-
-                let buffer_string = self.buffer.iter().collect::<String>();
-                let rendered_text = format!("{}>: {}", history_text, buffer_string);
-
-                let surface = font
-                    .render(rendered_text.as_str())
-                    .blended_wrapped(Color::RGBA(255, 255, 255, 255), config.screen_width)
-                    .map_err(|e| e.to_string())
-                    .unwrap();
-                let texture = texture_creator
-                    .create_texture_from_surface(&surface)
-                    .map_err(|e| e.to_string())
-                    .unwrap();
-
-                self.canvas.clear();
-
-                let TextureQuery { width, height, .. } = texture.query();
-
-                let target = get_text_rect(width, height);
-                let (current_screen_width, current_screen_height) =
-                    self.canvas.output_size().unwrap();
-
-                if height > current_screen_height {
-                    self.offset = height - current_screen_height;
-                    let source = get_text_rect_from_offset(
-                        height,
-                        current_screen_width,
-                        current_screen_height,
-                        self.offset,
-                    );
-                    let target = get_text_rect(current_screen_width, current_screen_height);
-                    self.canvas
-                        .copy(&texture, Some(source), Some(target))
-                        .unwrap();
-                } else {
-                    self.canvas.copy(&texture, None, Some(target)).unwrap();
-                }
-
-                self.canvas.present();
-
                 match event {
                     Event::KeyDown {
                         keycode: Some(Keycode::Escape),
@@ -264,6 +267,8 @@ impl Frontend for Sdl2TerminalFrontend {
                     _ => {}
                 }
             }
+
+            thread::sleep(Duration::from_millis(10));
         }
     }
 }

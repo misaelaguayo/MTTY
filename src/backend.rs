@@ -19,25 +19,26 @@ impl Backend for AsyncBackend {
             let command = self.receiver.try_recv();
             if let Ok(command) = command {
                 println!("Received command: {}", command.command);
-                let output = match read_command(command.clone()) {
-                    Ok(output) => {
-                        let stdout = String::from_utf8_lossy(&output);
-                        println!("Output: {}", stdout);
-                        vec![stdout.to_string()]
-                    }
+
+                let iterator = match read_command(command.clone()) {
+                    Ok(iterator) => iterator,
                     Err(e) => {
                         println!("Error: {}", e.to_string());
-                        vec![e.to_string()]
+                        return;
                     }
                 };
-                self.sender
-                    .send(Command {
-                        id: command.id,
-                        command: command.command,
-                        args: command.args,
-                        response: output,
-                    })
-                    .unwrap();
+
+                for output in iterator {
+                    print!("{}", output as char);
+                    self.sender
+                        .send(Command {
+                            id: command.id,
+                            command: command.command.clone(),
+                            args: command.args.clone(),
+                            response: vec![(output as char).to_string()],
+                        })
+                        .unwrap();
+                }
             }
         }
     }

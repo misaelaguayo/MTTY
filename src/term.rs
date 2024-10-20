@@ -1,3 +1,6 @@
+use std::io::{BufRead, BufReader};
+use std::process::{Child, ChildStdout};
+
 use crossbeam::channel::{unbounded, Receiver, Sender};
 use uuid::Uuid;
 
@@ -16,6 +19,10 @@ pub struct Command {
     pub command: String,
     pub args: Vec<String>,
     pub response: Vec<String>,
+}
+
+pub struct CommandOutputIterator {
+    pub output: Vec<u8>,
 }
 
 impl Terminal {
