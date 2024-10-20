@@ -29,13 +29,12 @@ impl Backend for AsyncBackend {
                 };
 
                 for output in iterator {
-                    print!("{}", output as char);
                     self.sender
                         .send(Command {
                             id: command.id,
                             command: command.command.clone(),
                             args: command.args.clone(),
-                            response: vec![(output as char).to_string()],
+                            response: vec![String::from_utf8(vec![output]).unwrap()],
                         })
                         .unwrap();
                 }
