@@ -1,3 +1,4 @@
+use log::warn;
 use serde::Deserialize;
 
 #[derive(Clone, Deserialize)]
@@ -16,8 +17,7 @@ impl Config {
             return Config::from_path(&path);
         }
 
-        #[cfg(debug_assertions)]
-        println!("No config file found, using default values");
+        warn!("No config file found, using default values");
 
         Config {
             font: String::from("Times New Roman"),

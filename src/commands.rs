@@ -3,6 +3,8 @@ use std::{
     io::{Error, ErrorKind, Read},
 };
 
+use log::info;
+
 use crate::term::{Command, CommandOutputIterator};
 
 impl CommandOutputIterator {
@@ -16,7 +18,7 @@ impl CommandOutputIterator {
 
         match handle.try_wait() {
             Ok(Some(status)) => {
-                println!("Command exited with status: {}", status);
+                info!("Command exited with status: {}", status);
                 if status.success() {
                     let output = handle.wait_with_output().unwrap();
                     let stdout = String::from_utf8_lossy(&output.stdout);

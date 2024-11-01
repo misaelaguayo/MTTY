@@ -10,6 +10,7 @@ dependencies = [
  "crossbeam",
  "dyn-clone",
  "font-kit",
+ "log",
  "sdl2",
  "serde",
  "serde_toml",

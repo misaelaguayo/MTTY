@@ -1,5 +1,5 @@
+use simplelogger::SimpleLogger;
 use std::thread;
-// use font_kit::source::SystemSource;
 
 extern crate sdl2;
 
@@ -7,9 +7,16 @@ pub mod backend;
 mod commands;
 mod config;
 pub mod frontend;
+mod simplelogger;
 mod term;
 
+static LOGGER: SimpleLogger = SimpleLogger;
+
 fn main() -> Result<(), String> {
+    log::set_logger(&LOGGER)
+        .map(|()| log::set_max_level(log::LevelFilter::Info))
+        .expect("Failed to set logger");
+
     let config = config::Config::new();
 
     let mut terminal = term::Terminal::build(config);

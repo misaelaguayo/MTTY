@@ -6,6 +6,7 @@ use crate::term::Command;
 use crossbeam::channel::{Receiver, Sender};
 use font_kit::handle::Handle;
 use font_kit::source::SystemSource;
+use log::error;
 use sdl2::event::Event;
 use sdl2::keyboard::{Keycode, Scancode};
 use sdl2::pixels::Color;
@@ -29,7 +30,6 @@ pub trait Frontend {
 pub struct Sdl2TerminalFrontend {
     pub config: Config,
     pub buffer: Vec<char>,
-    // TODO: change to a hashmap
     pub history: Vec<Command>,
     pub canvas: sdl2::render::Canvas<sdl2::video::Window>,
     pub sdl_context: sdl2::Sdl,
@@ -113,7 +113,7 @@ impl Frontend for Sdl2TerminalFrontend {
 
                 self.buffer.clear();
                 if let Err(e) = self.sender.send(command.clone()) {
-                    println!("Error sending command: {}", e);
+                    error!("Error sending command: {}", e);
                 }
                 self.history.push(command);
 

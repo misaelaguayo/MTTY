@@ -1,5 +1,6 @@
 use crossbeam::channel::{Receiver, Sender};
 use dyn_clone::DynClone;
+use log::{error, info};
 
 use crate::{commands::read_command, term::Command};
 
@@ -18,12 +19,12 @@ impl Backend for AsyncBackend {
         loop {
             let command = self.receiver.try_recv();
             if let Ok(command) = command {
-                println!("Received command: {}", command.command);
+                info!("Received command: {}", command.command);
 
                 let iterator = match read_command(command.clone()) {
                     Ok(iterator) => iterator,
                     Err(e) => {
-                        println!("Error: {}", e.to_string());
+                        error!("Error reading command: {}", e);
                         return;
                     }
                 };
