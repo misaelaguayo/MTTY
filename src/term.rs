@@ -3,7 +3,8 @@ use uuid::Uuid;
 
 use crate::backend::{AsyncBackend, Backend};
 use crate::config::Config;
-use crate::frontend::{Frontend, Sdl2TerminalFrontend};
+use crate::frontend::Frontend;
+use crate::sdl2frontend::Sdl2TerminalFrontend;
 
 pub struct Terminal {
     pub frontend: Box<dyn Frontend>,

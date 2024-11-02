@@ -7,6 +7,7 @@ pub mod backend;
 mod commands;
 mod config;
 pub mod frontend;
+mod sdl2frontend;
 mod simplelogger;
 mod term;
 
