@@ -1,43 +1,30 @@
-use simplelogger::SimpleLogger;
-use std::thread;
-
-extern crate sdl2;
-
-pub mod backend;
-mod commands;
-mod config;
-pub mod frontend;
-mod sdl2frontend;
-mod simplelogger;
+use std::{thread, time::Duration};
 mod term;
 
-static LOGGER: SimpleLogger = SimpleLogger;
 
-fn main() -> Result<(), String> {
-    log::set_logger(&LOGGER)
-        .map(|()| log::set_max_level(log::LevelFilter::Info))
-        .expect("Failed to set logger");
+use macroquad::prelude::*;
 
-    let config = config::Config::new();
+#[macroquad::main("MTTY")]
+async fn main() {
+    let term = term::Term::new();
+    println!("Starting");
+    thread::sleep(Duration::from_secs(1));
 
-    let mut terminal = term::Terminal::build(config);
-    let mut backend = dyn_clone::clone_box(&*terminal.backend);
-    thread::spawn(move || {
-        backend.execute();
-    });
+    // start user shell
+    term.write(b"bash\n");
 
-    terminal.run();
+    loop {
+        clear_background(BLACK);
 
-    test();
-    Ok(())
-}
+        match term.read() {
+            Some(data) => {
+                let text = String::from_utf8(data).unwrap();
+                draw_text(&text, 20.0, 20.0, 30.0, DARKGRAY);
+            }
+            None => {}
+        }
 
-// a test function used to test random stuff
-fn test() {
-    // print all available font families
-    // let system_source = SystemSource::new();
-    // let families = system_source.all_families().unwrap();
-    // for family in families {
-    //     println!("{}", family);
-    // }
+        next_frame().await;
+        thread::sleep(Duration::from_millis(100));
+    }
 }

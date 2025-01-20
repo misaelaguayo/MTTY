@@ -1,45 +1,55 @@
-use crossbeam::channel::{unbounded, Receiver, Sender};
-use uuid::Uuid;
+use std::{os::fd::{AsFd, AsRawFd, BorrowedFd, OwnedFd, RawFd}, thread};
 
-use crate::backend::{AsyncBackend, Backend};
-use crate::config::Config;
-use crate::frontend::Frontend;
-use crate::sdl2frontend::Sdl2TerminalFrontend;
+use nix::{pty::openpty, unistd::{read, write}};
 
-pub struct Terminal {
-    pub frontend: Box<dyn Frontend>,
-    pub backend: Box<dyn Backend + Send>,
+fn read_from_fd(fd: RawFd) -> Option<Vec<u8>> {
+    let mut read_buffer = [0; 65536];
+    let read_result = read(fd, &mut read_buffer);
+    match read_result {
+        Ok(bytes_read) => Some(read_buffer[..bytes_read].to_vec()),
+        Err(_e) => None,
+    }
 }
 
-#[derive(Clone)]
-pub struct Command {
-    pub id: Uuid,
-    pub command: String,
-    pub args: Vec<String>,
-    pub response: Vec<String>,
+fn write_to_fd(fd: BorrowedFd, data: &[u8]) {
+    let write = write(fd, data);
+    match write {
+        Ok(bytes_written) => println!("Wrote {} bytes", bytes_written),
+        Err(e) => println!("Error writing to fd: {}", e),
+    }
 }
 
-pub struct CommandOutputIterator {
-    pub output: Vec<u8>,
+pub struct Term {
+    pub parent: OwnedFd,
+    pub child: RawFd,
 }
 
-impl Terminal {
-    pub fn build(config: Config) -> Terminal {
-        let (backend_sender, backend_receiver): (Sender<Command>, Receiver<Command>) = unbounded();
-        let (frontend_sender, frontend_receiver): (Sender<Command>, Receiver<Command>) =
-            unbounded();
+impl Term {
+    pub fn new() -> Term {
+        let res = openpty(None, None).expect("Failed to open pty");
+        // write_to_fd(res.master.as_fd(), b"bash\n");
+        // thread::sleep(std::time::Duration::from_secs(1));
+        // match read_from_fd(res.master.as_raw_fd()) {
+        //     Some(data) => {
+        //         let text = String::from_utf8(data).unwrap();
+        //         println!("Read from pty: {}", text);
+        //     }
+        //     None => println!("Failed to read from pty"),
+        // }
 
-        let backend = Box::new(AsyncBackend::build(backend_sender, frontend_receiver));
-        let frontend = Box::new(Sdl2TerminalFrontend::build(
-            config,
-            frontend_sender,
-            backend_receiver,
-        ));
+        println!("Created pty with master fd: {} and slave fd: {}", res.master.as_raw_fd(), res.slave.as_raw_fd());
 
-        Terminal { frontend, backend }
+        Term {
+            parent: res.master,
+            child: res.slave.as_raw_fd(),
+        }
     }
 
-    pub fn run(&mut self) {
-        self.frontend.poll_event();
+    pub fn write(&self, data: &[u8]) {
+        write_to_fd(self.parent.as_fd(), data);
+    }
+
+    pub fn read(&self) -> Option<Vec<u8>> {
+        read_from_fd(self.parent.as_raw_fd())
     }
 }
