@@ -1,6 +1,15 @@
-use std::{os::fd::{AsFd, AsRawFd, BorrowedFd, OwnedFd, RawFd}, thread};
+use std::{
+    io::{self},
+    os::fd::{AsFd, AsRawFd, BorrowedFd, OwnedFd, RawFd},
+    process,
+};
 
-use nix::{pty::openpty, unistd::{read, write}};
+use nix::{
+    libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO},
+    pty::openpty,
+    sys::termios,
+    unistd::{close, dup2, execvp, fork, read, setsid, write, ForkResult},
+};
 
 fn read_from_fd(fd: RawFd) -> Option<Vec<u8>> {
     let mut read_buffer = [0; 65536];
@@ -24,24 +33,45 @@ pub struct Term {
     pub child: RawFd,
 }
 
+fn set_terminal_attrs(fd: BorrowedFd) {
+    if let Ok(termios) = termios::tcgetattr(io::stdin().as_fd()) {
+        let _ = termios::tcsetattr(fd, termios::SetArg::TCSANOW, &termios);
+    }
+}
+
 impl Term {
     pub fn new() -> Term {
-        let res = openpty(None, None).expect("Failed to open pty");
-        // write_to_fd(res.master.as_fd(), b"bash\n");
-        // thread::sleep(std::time::Duration::from_secs(1));
-        // match read_from_fd(res.master.as_raw_fd()) {
-        //     Some(data) => {
-        //         let text = String::from_utf8(data).unwrap();
-        //         println!("Read from pty: {}", text);
-        //     }
-        //     None => println!("Failed to read from pty"),
-        // }
+        let pty = openpty(None, None).expect("Failed to open pty");
+        let master_fd = pty.master;
+        let slave_fd = pty.slave;
 
-        println!("Created pty with master fd: {} and slave fd: {}", res.master.as_raw_fd(), res.slave.as_raw_fd());
+        match unsafe { fork() } {
+            Ok(ForkResult::Child) => {
+                // close(master_fd.as_raw_fd()).unwrap();
+                setsid().unwrap();
+                dup2(slave_fd.as_raw_fd(), STDIN_FILENO).unwrap();
+                dup2(slave_fd.as_raw_fd(), STDOUT_FILENO).unwrap();
+                dup2(slave_fd.as_raw_fd(), STDERR_FILENO).unwrap();
+                // close(slave_fd.as_raw_fd()).unwrap();
+                let _ = execvp(
+                    &std::ffi::CString::new("/bin/zsh").unwrap(),
+                    &[std::ffi::CString::new("zsh").unwrap()],
+                );
+                // process::exit(1);
+            }
+            Ok(ForkResult::Parent { .. }) => {
+                // close(slave_fd.as_raw_fd()).unwrap();
+                set_terminal_attrs(master_fd.as_fd());
+            }
+            Err(_) => {
+                eprintln!("Fork failed");
+                process::exit(1);
+            }
+        }
 
         Term {
-            parent: res.master,
-            child: res.slave.as_raw_fd(),
+            parent: master_fd,
+            child: slave_fd.as_raw_fd(),
         }
     }
 
