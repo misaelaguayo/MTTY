@@ -1,63 +1,27 @@
-use std::{
-    fs::File,
-    io::{self, Read},
-    os::fd::{AsFd, AsRawFd, FromRawFd},
-    thread,
-    time::Duration,
-};
+use std::{os::fd::{AsFd, AsRawFd}, thread};
 
-mod term;
+use term::{read_from_raw_fd, write_to_fd};
 
-use macroquad::prelude::*;
+pub mod term;
 
-#[macroquad::main("MTTY")]
-async fn main() {
-    let term = term::Term::new();
+fn main() {
+    let term = term::Term::new().unwrap();
+    let read_raw_fd = term.parent.as_raw_fd();
+    let write_fd = term.parent.as_fd();
 
-    let mut master_file = unsafe { File::from_raw_fd(term.parent.as_raw_fd()) };
-    let stdin = io::stdin();
-    let mut buffer = [0u8; 1024];
 
-    let mut read_fds = nix::sys::select::FdSet::new();
-    read_fds.insert(term.parent.as_fd());
-    read_fds.insert(stdin.as_fd());
-    nix::sys::select::select(None, &mut read_fds, None, None, None).unwrap();
+    thread::spawn(move || {
+        loop {
+            if let Some(data) = read_from_raw_fd(read_raw_fd) {
+                print!("{}", String::from_utf8(data).unwrap());
+            }
+        }
+    });
 
     loop {
-        clear_background(BLACK);
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input).unwrap();
 
-        // get_last_key_pressed().map(|key| {
-        //     draw_text(&format!("{:?}", key), 20.0, 20.0, 30.0, DARKGRAY);
-        // });
-
-        if read_fds.contains(stdin.as_fd()) {
-            let bytes_read = io::stdin().read(&mut buffer).unwrap_or(0);
-            if bytes_read == 0 {
-                break;
-            }
-            draw_text(
-                &String::from_utf8_lossy(&buffer[..bytes_read]),
-                20.0,
-                20.0,
-                30.0,
-                DARKGRAY,
-            );
-        }
-        if read_fds.contains(term.parent.as_fd()) {
-            let bytes_read = master_file.read(&mut buffer).unwrap_or(0);
-            if bytes_read == 0 {
-                break;
-            }
-            draw_text(
-                &String::from_utf8_lossy(&buffer[..bytes_read]),
-                20.0,
-                20.0,
-                30.0,
-                DARKGRAY,
-            );
-        }
-
-        next_frame().await;
-        thread::sleep(Duration::from_millis(10000));
+        write_to_fd(write_fd, input.as_bytes());
     }
 }

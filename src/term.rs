@@ -1,85 +1,98 @@
 use std::{
-    io::{self},
-    os::fd::{AsFd, AsRawFd, BorrowedFd, OwnedFd, RawFd},
-    process,
+    fs::File,
+    io::Error,
+    os::fd::{BorrowedFd, OwnedFd},
+    process::{Child, Command},
 };
 
-use nix::{
-    libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO},
-    pty::openpty,
-    sys::termios,
-    unistd::{close, dup2, execvp, fork, read, setsid, write, ForkResult},
-};
+use nix::unistd::read;
+use nix::unistd::write;
+use rustix::termios::{self, OptionalActions};
+use rustix_openpty::openpty;
 
-fn read_from_fd(fd: RawFd) -> Option<Vec<u8>> {
+// Steps to create a terminal
+// Call openpty to get a master and slave fd
+// The master fd is used to read and write to the terminal
+// The slave fd is used to create a new process
+//
+// Once we have the master and slave fd, we fork a new process
+// In the child process, we create a new process with the user's default shell
+// We then set the child process's stdin, stdout, and stderr to the slave fd
+// This is done by calling dup2(slave_fd, STDIN_FILENO), dup2(slave_fd, STDOUT_FILENO), and
+// dup2(slave_fd, STDERR_FILENO)
+// We should also call setsid to make the child process the session leader
+// This allows the child process to have a controlling terminal and handle signals
+//
+// on the parent process, we close the slave fd and set the terminal attributes
+// Example terminal attributes that should be set are terminal size, turn off echo, turn off
+// canonical mode, etc
+// We will then poll the master fd for any data
+// This can be done by calling read(master_fd, buffer)
+// We can also use syscalls like select or poll to wait for data on the master fd
+//
+pub fn read_from_raw_fd(fd: i32) -> Option<Vec<u8>> {
     let mut read_buffer = [0; 65536];
+
     let read_result = read(fd, &mut read_buffer);
+
     match read_result {
         Ok(bytes_read) => Some(read_buffer[..bytes_read].to_vec()),
         Err(_e) => None,
     }
 }
 
-fn write_to_fd(fd: BorrowedFd, data: &[u8]) {
-    let write = write(fd, data);
-    match write {
-        Ok(bytes_written) => println!("Wrote {} bytes", bytes_written),
-        Err(e) => println!("Error writing to fd: {}", e),
+pub fn write_to_fd(fd: BorrowedFd, data: &[u8]) {
+    let write_result = write(fd, data);
+
+    match write_result {
+        Ok(_) => (),
+        Err(e) => eprintln!("Failed to write to file: {:?}", e),
     }
 }
 
 pub struct Term {
-    pub parent: OwnedFd,
-    pub child: RawFd,
-}
-
-fn set_terminal_attrs(fd: BorrowedFd) {
-    if let Ok(termios) = termios::tcgetattr(io::stdin().as_fd()) {
-        let _ = termios::tcsetattr(fd, termios::SetArg::TCSANOW, &termios);
-    }
+    pub parent: File,
+    pub child: Child,
 }
 
 impl Term {
-    pub fn new() -> Term {
+    pub fn new() -> Result<Self, Error> {
         let pty = openpty(None, None).expect("Failed to open pty");
-        let master_fd = pty.master;
-        let slave_fd = pty.slave;
+        let (master, slave) = (pty.controller, pty.user);
 
-        match unsafe { fork() } {
-            Ok(ForkResult::Child) => {
-                // close(master_fd.as_raw_fd()).unwrap();
-                setsid().unwrap();
-                dup2(slave_fd.as_raw_fd(), STDIN_FILENO).unwrap();
-                dup2(slave_fd.as_raw_fd(), STDOUT_FILENO).unwrap();
-                dup2(slave_fd.as_raw_fd(), STDERR_FILENO).unwrap();
-                // close(slave_fd.as_raw_fd()).unwrap();
-                let _ = execvp(
-                    &std::ffi::CString::new("/bin/zsh").unwrap(),
-                    &[std::ffi::CString::new("zsh").unwrap()],
-                );
-                // process::exit(1);
-            }
-            Ok(ForkResult::Parent { .. }) => {
-                // close(slave_fd.as_raw_fd()).unwrap();
-                set_terminal_attrs(master_fd.as_fd());
-            }
-            Err(_) => {
-                eprintln!("Fork failed");
-                process::exit(1);
-            }
+        Self::from_fd(master, slave)
+    }
+
+    fn from_fd(master: OwnedFd, slave: OwnedFd) -> Result<Term, Error> {
+        if let Ok(mut termios) = termios::tcgetattr(&master) {
+            termios.local_modes.set(termios::LocalModes::ECHO, false);
+
+            let _ = termios::tcsetattr(&master, OptionalActions::Now, &termios);
         }
 
-        Term {
-            parent: master_fd,
-            child: slave_fd.as_raw_fd(),
+        let mut builder = Self::default_shell_command();
+
+        builder.stdin(slave.try_clone()?);
+        builder.stdout(slave.try_clone()?);
+        builder.stderr(slave);
+
+        match builder.spawn() {
+            Ok(child) => Ok(Term {
+                parent: File::from(master),
+                child,
+            }),
+            Err(e) => Err(e),
         }
     }
 
-    pub fn write(&self, data: &[u8]) {
-        write_to_fd(self.parent.as_fd(), data);
-    }
+    #[cfg(target_os = "macos")]
+    fn default_shell_command() -> Command {
+        // TODO: Grab shell from environment variable
 
-    pub fn read(&self) -> Option<Vec<u8>> {
-        read_from_fd(self.parent.as_raw_fd())
+        let mut command = Command::new("/usr/bin/login");
+
+        let exec = format!("exec -a {} {}", "zsh", "/bin/zsh");
+        command.args(["-flp", "misaelaguayo", "/bin/zsh", "-fc", &exec]);
+        command
     }
 }
