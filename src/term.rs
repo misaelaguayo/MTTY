@@ -1,3 +1,4 @@
+use std::env;
 use std::{
     fs::File,
     io::Error,
@@ -87,12 +88,15 @@ impl Term {
 
     #[cfg(target_os = "macos")]
     fn default_shell_command() -> Command {
-        // TODO: Grab shell from environment variable
+        let shell = env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
+        let shell_name = shell.split('/').last().unwrap();
+
+        let user = env::var("USER").expect("Failed to get user");
 
         let mut command = Command::new("/usr/bin/login");
 
-        let exec = format!("exec -a {} {}", "zsh", "/bin/zsh");
-        command.args(["-flp", "misaelaguayo", "/bin/zsh", "-fc", &exec]);
+        let exec = format!("exec -a {} {}", shell_name, shell);
+        command.args(["-flp", &user, shell_name, "-fc", &exec]);
         command
     }
 }

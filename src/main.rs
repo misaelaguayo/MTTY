@@ -1,4 +1,7 @@
-use std::{os::fd::{AsFd, AsRawFd}, thread};
+use std::{
+    os::fd::{AsFd, AsRawFd},
+    thread,
+};
 
 use term::{read_from_raw_fd, write_to_fd};
 
@@ -9,12 +12,9 @@ fn main() {
     let read_raw_fd = term.parent.as_raw_fd();
     let write_fd = term.parent.as_fd();
 
-
-    thread::spawn(move || {
-        loop {
-            if let Some(data) = read_from_raw_fd(read_raw_fd) {
-                print!("{}", String::from_utf8(data).unwrap());
-            }
+    thread::spawn(move || loop {
+        if let Some(data) = read_from_raw_fd(read_raw_fd) {
+            print!("{}", String::from_utf8(data).unwrap());
         }
     });
 
