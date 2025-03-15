@@ -7,7 +7,7 @@ use std::{
 
 use nix::unistd::read;
 use nix::unistd::write;
-use rustix::termios::{self, OptionalActions};
+use rustix::termios::{self, OptionalActions, Termios};
 use rustix_openpty::openpty;
 
 // Steps to create a terminal
@@ -65,8 +65,7 @@ impl Term {
 
     fn from_fd(master: OwnedFd, slave: OwnedFd) -> Result<Term, Error> {
         if let Ok(mut termios) = termios::tcgetattr(&master) {
-            termios.local_modes.set(termios::LocalModes::ECHO, false);
-
+            enable_raw_mode(&mut termios);
             let _ = termios::tcsetattr(&master, OptionalActions::Now, &termios);
         }
 
@@ -98,4 +97,22 @@ impl Term {
         command.args(["-flp", &user, shell_name, "-fc", &exec]);
         command
     }
+}
+
+fn enable_raw_mode(termios: &mut Termios) {
+    termios.input_modes.remove(
+        termios::InputModes::BRKINT
+            | termios::InputModes::ICRNL
+            | termios::InputModes::INPCK
+            | termios::InputModes::ISTRIP
+            | termios::InputModes::IXON
+    );
+    termios.output_modes.remove(termios::OutputModes::OPOST);
+    termios.local_modes.remove(
+        termios::LocalModes::ECHO
+            | termios::LocalModes::ICANON
+            | termios::LocalModes::ISIG
+            | termios::LocalModes::IEXTEN,
+    );
+    termios.control_modes.remove(termios::ControlModes::CS8);
 }
