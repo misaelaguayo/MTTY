@@ -1,6 +1,5 @@
 use std::env;
 use std::{
-    fs::File,
     io::Error,
     os::fd::{BorrowedFd, OwnedFd},
     process::{Child, Command},
@@ -52,7 +51,7 @@ pub fn write_to_fd(fd: BorrowedFd, data: &[u8]) {
 }
 
 pub struct Term {
-    pub parent: File,
+    pub parent: OwnedFd,
     pub child: Child,
 }
 
@@ -79,7 +78,7 @@ impl Term {
 
         match builder.spawn() {
             Ok(child) => Ok(Term {
-                parent: File::from(master),
+                parent: master,
                 child,
             }),
             Err(e) => Err(e),
