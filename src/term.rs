@@ -105,7 +105,7 @@ fn enable_raw_mode(termios: &mut Termios) {
             | termios::InputModes::ICRNL
             | termios::InputModes::INPCK
             | termios::InputModes::ISTRIP
-            | termios::InputModes::IXON
+            | termios::InputModes::IXON,
     );
     termios.output_modes.remove(termios::OutputModes::OPOST);
     termios.local_modes.remove(
