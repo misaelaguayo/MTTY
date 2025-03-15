@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+eframe = "0.30.0"
 macroquad = "0.4.13"
 nix = { version = "0.29.0", features = ["term", "process", "fs", "poll"] }
 rustix = { version = "1.0.2", features = ["termios"] }
