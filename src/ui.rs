@@ -9,7 +9,7 @@ pub struct Ui {
 }
 
 impl Ui {
-    pub fn new(tx: Sender<Vec<u8>>,rx: Receiver<Vec<u8>>) -> Self {
+    pub fn new(tx: Sender<Vec<u8>>, rx: Receiver<Vec<u8>>) -> Self {
         Self {
             output: String::new(),
             input: String::new(),
@@ -31,7 +31,6 @@ impl eframe::App for Ui {
             let _ = self.tx.try_send(self.input.as_bytes().to_vec());
 
             self.input.clear();
-
         }
 
         egui::CentralPanel::default().show(ctx, |ui| {

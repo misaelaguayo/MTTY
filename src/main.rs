@@ -3,6 +3,7 @@ use std::os::fd::{AsFd, AsRawFd};
 use term::{read_from_raw_fd, write_to_fd};
 use tokio::sync::mpsc;
 
+pub mod statemachine;
 pub mod term;
 pub mod ui;
 
@@ -11,15 +12,17 @@ async fn main() {
     let term = term::Term::new().unwrap();
     let read_raw_fd = term.parent.try_clone().unwrap();
     let write_fd = term.parent.try_clone().unwrap();
-    let (output_tx, output_rx) = mpsc::channel(100);
-    let (input_tx, mut input_rx): (mpsc::Sender<Vec<u8>>, mpsc::Receiver<Vec<u8>>) = mpsc::channel(100);
+    let (output_tx, output_rx) = mpsc::channel(10000);
+    let (input_tx, mut input_rx): (mpsc::Sender<Vec<u8>>, mpsc::Receiver<Vec<u8>>) =
+        mpsc::channel(100);
 
     tokio::spawn(async move {
+        let mut statemachine = vte::Parser::new();
+        let mut performer = statemachine::StateMachine::new(output_tx);
+
         loop {
             if let Some(data) = read_from_raw_fd(read_raw_fd.as_raw_fd()) {
-                if let Err(_) = output_tx.send(data).await {
-                    break;
-                }
+                statemachine.advance(&mut performer, &data);
             }
         }
     });
@@ -40,5 +43,9 @@ fn draw(tx: mpsc::Sender<Vec<u8>>, rx: mpsc::Receiver<Vec<u8>>) {
         viewport: eframe::egui::ViewportBuilder::default().with_inner_size([320.0, 240.0]),
         ..Default::default()
     };
-    let _ = eframe::run_native("MTTY", options, Box::new(|_| Ok(Box::new(ui::Ui::new(tx, rx)))));
+    let _ = eframe::run_native(
+        "MTTY",
+        options,
+        Box::new(|_| Ok(Box::new(ui::Ui::new(tx, rx)))),
+    );
 }
