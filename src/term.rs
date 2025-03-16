@@ -1,12 +1,14 @@
+use std::env;
+use std::os::fd::AsRawFd;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::env;
 use std::{
     io::Error,
     os::fd::{BorrowedFd, OwnedFd},
     process::{Child, Command},
 };
 
+use nix::libc::{self, c_int};
 use nix::unistd::read;
 use nix::unistd::write;
 use rustix::termios::{self, OptionalActions, Termios};
@@ -69,8 +71,16 @@ impl Term {
     }
 
     fn from_fd(master: OwnedFd, slave: OwnedFd) -> Result<Term, Error> {
+        let master_fd = master.as_raw_fd();
         if let Ok(mut termios) = termios::tcgetattr(&master) {
             enable_raw_mode(&mut termios);
+
+            // set read timeout
+            termios.special_codes[termios::SpecialCodeIndex::VTIME] = 1;
+
+            // set read minimum bytes
+            termios.special_codes[termios::SpecialCodeIndex::VMIN] = 0;
+
             let _ = termios::tcsetattr(&master, OptionalActions::Now, &termios);
         }
 
@@ -81,10 +91,15 @@ impl Term {
         builder.stderr(slave);
 
         match builder.spawn() {
-            Ok(child) => Ok(Term {
-                parent: master,
-                child,
-            }),
+            Ok(child) => {
+                unsafe {
+                    set_nonblocking(master_fd);
+                }
+                Ok(Term {
+                    parent: master,
+                    child,
+                })
+            }
             Err(e) => Err(e),
         }
     }
@@ -122,7 +137,11 @@ fn enable_raw_mode(termios: &mut Termios) {
     termios.control_modes.remove(termios::ControlModes::CS8);
 }
 
-pub fn spawn_read_thread(fd: i32, read_exit_flag: Arc<AtomicBool>, output_tx: mpsc::Sender<Vec<u8>>) {
+pub fn spawn_read_thread(
+    fd: i32,
+    read_exit_flag: Arc<AtomicBool>,
+    output_tx: mpsc::Sender<Vec<u8>>,
+) {
     tokio::spawn(async move {
         let mut statemachine = vte::Parser::new();
         let mut performer = statemachine::StateMachine::new(output_tx);
@@ -137,4 +156,11 @@ pub fn spawn_read_thread(fd: i32, read_exit_flag: Arc<AtomicBool>, output_tx: mp
             }
         }
     });
+}
+
+unsafe fn set_nonblocking(fd: c_int) {
+    use libc::{fcntl, F_GETFL, F_SETFL, O_NONBLOCK};
+
+    let res = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK);
+    assert_eq!(res, 0);
 }
