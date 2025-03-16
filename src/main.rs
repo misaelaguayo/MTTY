@@ -1,5 +1,6 @@
-use std::os::fd::{AsFd, AsRawFd};
+use std::{os::fd::{AsFd, AsRawFd}, thread};
 
+use eframe::egui;
 use term::{read_from_raw_fd, write_to_fd};
 use tokio::sync::mpsc;
 
@@ -46,6 +47,19 @@ fn draw(tx: mpsc::Sender<Vec<u8>>, rx: mpsc::Receiver<Vec<u8>>) {
     let _ = eframe::run_native(
         "MTTY",
         options,
-        Box::new(|_| Ok(Box::new(ui::Ui::new(tx, rx)))),
+        Box::new(|cc| {
+            let ctx = cc.egui_ctx.clone();
+            thread::spawn(|| {
+                redraw(ctx);
+            });
+            return Ok(Box::new(ui::Ui::new(tx, rx)));
+        }),
     );
+}
+
+fn redraw(ctx: egui::Context){
+    loop {
+        thread::sleep(std::time::Duration::from_millis(10));
+        ctx.request_repaint();
+    }
 }
