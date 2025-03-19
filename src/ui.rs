@@ -3,16 +3,18 @@ use std::sync::{atomic::AtomicBool, Arc};
 use eframe::egui;
 use tokio::sync::mpsc::{Receiver, Sender};
 
+use crate::commands::Command;
+
 pub struct Ui {
     exit_flag: Arc<AtomicBool>,
     output: String,
     input: String,
     tx: Sender<Vec<u8>>,
-    rx: Receiver<Vec<u8>>,
+    rx: Receiver<Command>,
 }
 
 impl Ui {
-    pub fn new(exit_flag: Arc<AtomicBool>, tx: Sender<Vec<u8>>, rx: Receiver<Vec<u8>>) -> Self {
+    pub fn new(exit_flag: Arc<AtomicBool>, tx: Sender<Vec<u8>>, rx: Receiver<Command>) -> Self {
         Self {
             exit_flag,
             output: String::new(),
@@ -26,8 +28,21 @@ impl Ui {
 impl eframe::App for Ui {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         if let Some(data) = self.rx.try_recv().ok() {
-            let data = String::from_utf8(data).unwrap();
-            self.output.push_str(&data);
+            match data {
+                Command::Print(c) => {
+                    self.output.push(c);
+                }
+                Command::NewLine => {
+                    self.output.push('\n');
+                }
+                Command::CarriageReturn => {
+                    self.output.push('\r');
+                }
+                Command::ClearScreen => {
+                    self.output.clear();
+                }
+                _ => {}
+            }
         }
 
         if !self.input.is_empty() && self.input.ends_with('\n') {

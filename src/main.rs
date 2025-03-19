@@ -1,9 +1,18 @@
-use std::{os::fd::{AsFd, AsRawFd}, sync::{atomic::{AtomicBool, Ordering}, Arc}, thread};
+use std::{
+    os::fd::{AsFd, AsRawFd},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    thread,
+};
 
+use commands::Command;
 use eframe::egui;
 use term::write_to_fd;
 use tokio::sync::mpsc;
 
+pub mod commands;
 pub mod statemachine;
 pub mod term;
 pub mod ui;
@@ -38,7 +47,7 @@ async fn main() {
     draw(exit_flag, input_tx, output_rx);
 }
 
-fn draw(exit_flag: Arc<AtomicBool>, tx: mpsc::Sender<Vec<u8>>, rx: mpsc::Receiver<Vec<u8>>) {
+fn draw(exit_flag: Arc<AtomicBool>, tx: mpsc::Sender<Vec<u8>>, rx: mpsc::Receiver<Command>) {
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default().with_inner_size([320.0, 240.0]),
         ..Default::default()
@@ -56,7 +65,7 @@ fn draw(exit_flag: Arc<AtomicBool>, tx: mpsc::Sender<Vec<u8>>, rx: mpsc::Receive
     );
 }
 
-fn redraw(ctx: egui::Context){
+fn redraw(ctx: egui::Context) {
     loop {
         thread::sleep(std::time::Duration::from_millis(10));
         ctx.request_repaint();

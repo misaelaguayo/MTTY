@@ -15,6 +15,7 @@ use rustix::termios::{self, OptionalActions, Termios};
 use rustix_openpty::openpty;
 use tokio::sync::mpsc;
 
+use crate::commands::Command as TermCommand;
 use crate::statemachine;
 
 // Steps to create a terminal
@@ -93,6 +94,7 @@ impl Term {
         match builder.spawn() {
             Ok(child) => {
                 unsafe {
+                    // this allows read to return immediately and not block drawing
                     set_nonblocking(master_fd);
                 }
                 Ok(Term {
@@ -140,7 +142,7 @@ fn enable_raw_mode(termios: &mut Termios) {
 pub fn spawn_read_thread(
     fd: i32,
     read_exit_flag: Arc<AtomicBool>,
-    output_tx: mpsc::Sender<Vec<u8>>,
+    output_tx: mpsc::Sender<TermCommand>,
 ) {
     tokio::spawn(async move {
         let mut statemachine = vte::Parser::new();

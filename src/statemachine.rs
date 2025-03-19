@@ -1,32 +1,35 @@
 use tokio::sync::mpsc::Sender;
 use vte::{Params, Perform};
 
+use crate::commands::Command;
+
 pub struct StateMachine {
-    tx: Sender<Vec<u8>>,
+    tx: Sender<Command>,
 }
 
 impl StateMachine {
-    pub fn new(tx: Sender<Vec<u8>>) -> Self {
+    pub fn new(tx: Sender<Command>) -> Self {
         Self { tx }
     }
 }
 
 impl Perform for StateMachine {
     fn print(&mut self, c: char) {
-        self.tx.try_send(vec![c as u8]).unwrap();
+        self.tx.try_send(Command::Print(c)).unwrap();
     }
 
     fn execute(&mut self, byte: u8) {
         match byte {
             0x0a => {
-                self.tx.try_send("\n".as_bytes().to_vec()).unwrap();
+                self.tx.try_send(Command::NewLine).unwrap();
             }
             0x0d => {
-                self.tx.try_send("\r".as_bytes().to_vec()).unwrap();
+                self.tx.try_send(Command::CarriageReturn).unwrap();
             }
-            _ => {}
+            _ => {
+                println!("[execute] {:02x}", byte);
+            }
         }
-        println!("[execute] {:02x}", byte);
     }
 
     fn hook(&mut self, params: &Params, intermediates: &[u8], ignore: bool, c: char) {
@@ -52,10 +55,42 @@ impl Perform for StateMachine {
     }
 
     fn csi_dispatch(&mut self, params: &Params, intermediates: &[u8], ignore: bool, c: char) {
-        println!(
-            "[csi_dispatch] params={:#?}, intermediates={:?}, ignore={:?}, char={:?}",
-            params, intermediates, ignore, c
-        );
+        match c {
+            'J' => {
+                if let Some(clear_type) = params.iter().next().map(|param| param[0]) {
+                    match clear_type {
+                        0 => {
+                            self.tx.try_send(Command::ClearBelow).unwrap();
+                        }
+                        1 => {
+                            self.tx.try_send(Command::ClearAbove).unwrap();
+                        }
+                        2 => {
+                            self.tx.try_send(Command::ClearScreen).unwrap();
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            'm' => {
+                if intermediates.is_empty() {
+                    for param in params.iter() {
+                        match param[0] {
+                            0 => {
+                                self.tx.try_send(Command::ResetStyles).unwrap();
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            _ => {
+                println!(
+                    "[csi_dispatch] params={:#?}, intermediates={:?}, ignore={:?}, char={:?}",
+                    params, intermediates, ignore, c
+                );
+            }
+        }
     }
 
     fn esc_dispatch(&mut self, intermediates: &[u8], ignore: bool, byte: u8) {
