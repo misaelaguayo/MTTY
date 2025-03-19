@@ -1,11 +1,13 @@
 use tokio::sync::mpsc::Sender;
 use vte::{Params, Perform};
 
-pub struct StateMachine {tx: Sender<Vec<u8>>}
+pub struct StateMachine {
+    tx: Sender<Vec<u8>>,
+}
 
 impl StateMachine {
     pub fn new(tx: Sender<Vec<u8>>) -> Self {
-        Self {tx}
+        Self { tx }
     }
 }
 
@@ -43,7 +45,10 @@ impl Perform for StateMachine {
     }
 
     fn osc_dispatch(&mut self, params: &[&[u8]], bell_terminated: bool) {
-        println!("[osc_dispatch] params={:?} bell_terminated={}", params, bell_terminated);
+        println!(
+            "[osc_dispatch] params={:?} bell_terminated={}",
+            params, bell_terminated
+        );
     }
 
     fn csi_dispatch(&mut self, params: &Params, intermediates: &[u8], ignore: bool, c: char) {

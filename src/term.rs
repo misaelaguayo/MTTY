@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::env;
 use std::{
     io::Error,
@@ -9,6 +11,9 @@ use nix::unistd::read;
 use nix::unistd::write;
 use rustix::termios::{self, OptionalActions, Termios};
 use rustix_openpty::openpty;
+use tokio::sync::mpsc;
+
+use crate::statemachine;
 
 // Steps to create a terminal
 // Call openpty to get a master and slave fd
@@ -115,4 +120,21 @@ fn enable_raw_mode(termios: &mut Termios) {
             | termios::LocalModes::IEXTEN,
     );
     termios.control_modes.remove(termios::ControlModes::CS8);
+}
+
+pub fn spawn_read_thread(fd: i32, read_exit_flag: Arc<AtomicBool>, output_tx: mpsc::Sender<Vec<u8>>) {
+    tokio::spawn(async move {
+        let mut statemachine = vte::Parser::new();
+        let mut performer = statemachine::StateMachine::new(output_tx);
+
+        loop {
+            if let Some(data) = read_from_raw_fd(fd) {
+                statemachine.advance(&mut performer, &data);
+            }
+
+            if read_exit_flag.load(Ordering::Relaxed) {
+                break;
+            }
+        }
+    });
 }

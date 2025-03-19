@@ -1,7 +1,10 @@
+use std::sync::{atomic::AtomicBool, Arc};
+
 use eframe::egui;
 use tokio::sync::mpsc::{Receiver, Sender};
 
 pub struct Ui {
+    exit_flag: Arc<AtomicBool>,
     output: String,
     input: String,
     tx: Sender<Vec<u8>>,
@@ -9,8 +12,9 @@ pub struct Ui {
 }
 
 impl Ui {
-    pub fn new(tx: Sender<Vec<u8>>, rx: Receiver<Vec<u8>>) -> Self {
+    pub fn new(exit_flag: Arc<AtomicBool>, tx: Sender<Vec<u8>>, rx: Receiver<Vec<u8>>) -> Self {
         Self {
+            exit_flag,
             output: String::new(),
             input: String::new(),
             tx,
@@ -39,5 +43,10 @@ impl eframe::App for Ui {
             ui.label(&self.output);
             ui.text_edit_multiline(&mut self.input);
         });
+    }
+
+    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
+        self.exit_flag
+            .store(true, std::sync::atomic::Ordering::Relaxed);
     }
 }
