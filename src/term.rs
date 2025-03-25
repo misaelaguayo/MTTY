@@ -16,6 +16,7 @@ use rustix_openpty::openpty;
 use tokio::sync::mpsc;
 
 use crate::commands::Command as TermCommand;
+use crate::config::Config;
 use crate::statemachine;
 
 // Steps to create a terminal
@@ -64,8 +65,15 @@ pub struct Term {
 }
 
 impl Term {
-    pub fn new() -> Result<Self, Error> {
-        let pty = openpty(None, None).expect("Failed to open pty");
+    pub fn new(config: &Config) -> Result<Self, Error> {
+        let winsize = termios::Winsize {
+            ws_row: config.height as u16,
+            ws_col: config.width as u16,
+            ws_xpixel: 0,
+            ws_ypixel: 0,
+        };
+
+        let pty = openpty(None, Some(&winsize)).expect("Failed to open pty");
         let (master, slave) = (pty.controller, pty.user);
 
         Self::from_fd(master, slave)
