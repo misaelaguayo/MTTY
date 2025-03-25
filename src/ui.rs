@@ -53,10 +53,12 @@ impl eframe::App for Ui {
         }
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("MTTY");
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                ui.heading("MTTY");
 
-            ui.label(&self.output);
-            ui.text_edit_multiline(&mut self.input);
+                ui.label(&self.output);
+                ui.text_edit_multiline(&mut self.input);
+            });
         });
     }
 
