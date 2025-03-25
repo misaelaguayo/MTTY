@@ -56,6 +56,28 @@ impl Perform for StateMachine {
 
     fn csi_dispatch(&mut self, params: &Params, intermediates: &[u8], ignore: bool, c: char) {
         match c {
+            'h' => {
+                match params.len() {
+                    1049 => {
+                        self.tx.try_send(Command::AlternateScreenBuffer(true)).unwrap();
+                    }
+                    2004 => {
+                        self.tx.try_send(Command::BrackPasteMode(true)).unwrap();
+                    }
+                    _ => {}
+                }
+            }
+            'l' => {
+                match params.len() {
+                    1049 => {
+                        self.tx.try_send(Command::AlternateScreenBuffer(false)).unwrap();
+                    }
+                    2004 => {
+                        self.tx.try_send(Command::BrackPasteMode(false)).unwrap();
+                    }
+                    _ => {}
+                }
+            }
             'J' => {
                 if let Some(clear_type) = params.iter().next().map(|param| param[0]) {
                     match clear_type {
