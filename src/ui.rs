@@ -23,6 +23,34 @@ impl Ui {
             rx,
         }
     }
+
+    fn handle_event(&mut self, event: &egui::Event) {
+        match event {
+            egui::Event::Key {
+                key: egui::Key::Enter,
+                ..
+            } => {
+                self.input.push('\n');
+            }
+            egui::Event::Key {
+                key: egui::Key::Escape,
+                ..
+            } => {
+                self.exit_flag
+                    .store(true, std::sync::atomic::Ordering::Relaxed);
+            }
+            egui::Event::Key {
+                key: egui::Key::Backspace,
+                ..
+            } => {
+                self.input.pop();
+            }
+            egui::Event::Text(text) => {
+                self.input.push_str(text);
+            }
+            _ => {}
+        }
+    }
 }
 
 impl eframe::App for Ui {
@@ -53,11 +81,15 @@ impl eframe::App for Ui {
         }
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                ui.heading("MTTY");
+            ui.input(|i| {
+                i.raw.events.iter().for_each(|event| {
+                    self.handle_event(event);
+                });
+            });
 
+            egui::ScrollArea::vertical().show(ui, |ui| {
                 ui.label(&self.output);
-                ui.text_edit_multiline(&mut self.input);
+                ui.label(&self.input);
             });
         });
     }
