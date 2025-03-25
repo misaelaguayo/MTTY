@@ -67,10 +67,10 @@ pub struct Term {
 impl Term {
     pub fn new(config: &Config) -> Result<Self, Error> {
         let winsize = termios::Winsize {
-            ws_row: config.height as u16,
-            ws_col: config.width as u16,
-            ws_xpixel: 0,
-            ws_ypixel: 0,
+            ws_row: config.rows,
+            ws_col: config.cols,
+            ws_xpixel: config.width as u16,
+            ws_ypixel: config.height as u16,
         };
 
         let pty = openpty(None, Some(&winsize)).expect("Failed to open pty");

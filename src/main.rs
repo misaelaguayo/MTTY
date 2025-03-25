@@ -9,7 +9,7 @@ use std::{
 
 use commands::Command;
 use config::Config;
-use eframe::egui;
+use eframe::egui::{self, FontFamily, FontId, TextStyle};
 use term::write_to_fd;
 use tokio::sync::mpsc;
 
@@ -60,6 +60,7 @@ fn draw(config: &Config, exit_flag: Arc<AtomicBool>, tx: mpsc::Sender<Vec<u8>>, 
         options,
         Box::new(|cc| {
             let ctx = cc.egui_ctx.clone();
+            configure_text_styles(&ctx, &config);
             thread::spawn(|| {
                 redraw(ctx);
             });
@@ -68,6 +69,21 @@ fn draw(config: &Config, exit_flag: Arc<AtomicBool>, tx: mpsc::Sender<Vec<u8>>, 
     );
 }
 
+fn configure_text_styles(ctx: &egui::Context, config: &Config) {
+    use FontFamily::Proportional;
+    use TextStyle::*;
+
+    let mut style = (*ctx.style()).clone();
+    style.text_styles = [
+        (Heading, FontId::new(30.0, Proportional)),
+        (Body, FontId::new(18.0, Proportional)),
+        (Monospace, FontId::new(config.font_size, Proportional)),
+        (Button, FontId::new(14.0, Proportional)),
+        (Small, FontId::new(10.0, Proportional)),
+    ]
+    .into();
+    ctx.set_style(style);
+}
 fn redraw(ctx: egui::Context) {
     loop {
         thread::sleep(std::time::Duration::from_millis(10));
