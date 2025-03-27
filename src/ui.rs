@@ -11,7 +11,6 @@ pub struct Ui {
     input: String,
     tx: Sender<Vec<u8>>,
     rx: Receiver<Command>,
-    cursor: (u32, u32),
 }
 
 impl Ui {
@@ -22,7 +21,6 @@ impl Ui {
             input: String::new(),
             tx,
             rx,
-            cursor: (0, 0),
         }
     }
 
@@ -75,7 +73,7 @@ impl eframe::App for Ui {
             }
         }
 
-        if !self.input.is_empty(){
+        if !self.input.is_empty() {
             // self.output.push_str(&self.input);
             let _ = self.tx.try_send(self.input.as_bytes().to_vec());
 

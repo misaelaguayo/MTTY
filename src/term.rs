@@ -1,5 +1,5 @@
 use std::env;
-use std::os::fd::AsRawFd;
+use std::os::fd::{AsFd, AsRawFd};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::{
@@ -13,7 +13,7 @@ use nix::unistd::read;
 use nix::unistd::write;
 use rustix::termios::{self, OptionalActions, Termios};
 use rustix_openpty::openpty;
-use tokio::sync::mpsc;
+use tokio::sync::mpsc::{self, Receiver};
 
 use crate::commands::Command as TermCommand;
 use crate::config::Config;
@@ -162,6 +162,24 @@ pub fn spawn_read_thread(
             }
 
             if read_exit_flag.load(Ordering::Relaxed) {
+                break;
+            }
+        }
+    });
+}
+
+pub fn spawn_write_thread(
+    write_fd: OwnedFd,
+    mut input_rx: Receiver<Vec<u8>>,
+    exit_flag: Arc<AtomicBool>,
+) {
+    tokio::spawn(async move {
+        loop {
+            if let Some(data) = input_rx.recv().await {
+                write_to_fd(write_fd.as_fd(), &data);
+            }
+
+            if exit_flag.load(Ordering::Relaxed) {
                 break;
             }
         }

@@ -8,5 +8,5 @@ pub enum Command {
     Exit,
     NewLine,
     Print(char),
-    ResetStyles
+    ResetStyles,
 }

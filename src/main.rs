@@ -1,58 +1,46 @@
 use std::{
-    os::fd::{AsFd, AsRawFd},
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
+    os::fd::AsRawFd,
+    sync::{atomic::AtomicBool, Arc},
     thread,
 };
 
 use commands::Command;
 use config::Config;
 use eframe::egui::{self, FontFamily, FontId, TextStyle};
-use term::write_to_fd;
 use tokio::sync::mpsc;
 
 pub mod commands;
+pub mod config;
 pub mod statemachine;
 pub mod term;
 pub mod ui;
-pub mod config;
 
 #[tokio::main]
 async fn main() {
     let config = config::Config::default();
     let exit_flag = Arc::new(AtomicBool::new(false));
-    let terminal_read_exit_flag = exit_flag.clone();
-    let terminal_write_exit_flag = exit_flag.clone();
 
     let term = term::Term::new(&config).unwrap();
-    let read_raw_fd = term.parent.try_clone().unwrap();
+    let read_fd = term.parent.try_clone().unwrap();
     let write_fd = term.parent.try_clone().unwrap();
     let (output_tx, output_rx) = mpsc::channel(10000);
-    let (input_tx, mut input_rx): (mpsc::Sender<Vec<u8>>, mpsc::Receiver<Vec<u8>>) =
-        mpsc::channel(100);
+    let (input_tx, input_rx): (mpsc::Sender<Vec<u8>>, mpsc::Receiver<Vec<u8>>) = mpsc::channel(100);
 
-    term::spawn_read_thread(read_raw_fd.as_raw_fd(), terminal_read_exit_flag, output_tx);
+    term::spawn_read_thread(read_fd.as_raw_fd(), exit_flag.clone(), output_tx);
+    term::spawn_write_thread(write_fd, input_rx, exit_flag.clone());
 
-    tokio::spawn(async move {
-        loop {
-            if let Some(data) = input_rx.recv().await {
-                write_to_fd(write_fd.as_fd(), &data);
-            }
-
-            if terminal_write_exit_flag.load(Ordering::Relaxed) {
-                break;
-            }
-        }
-    });
-
-    draw(&config, exit_flag, input_tx, output_rx);
+    start_ui(&config, exit_flag, input_tx, output_rx);
 }
 
-fn draw(config: &Config, exit_flag: Arc<AtomicBool>, tx: mpsc::Sender<Vec<u8>>, rx: mpsc::Receiver<Command>) {
+fn start_ui(
+    config: &Config,
+    exit_flag: Arc<AtomicBool>,
+    tx: mpsc::Sender<Vec<u8>>,
+    rx: mpsc::Receiver<Command>,
+) {
     let options = eframe::NativeOptions {
-        viewport: eframe::egui::ViewportBuilder::default().with_inner_size([config.width, config.height]),
+        viewport: eframe::egui::ViewportBuilder::default()
+            .with_inner_size([config.width, config.height]),
         ..Default::default()
     };
     let _ = eframe::run_native(
@@ -84,6 +72,7 @@ fn configure_text_styles(ctx: &egui::Context, config: &Config) {
     .into();
     ctx.set_style(style);
 }
+
 fn redraw(ctx: egui::Context) {
     loop {
         thread::sleep(std::time::Duration::from_millis(10));
