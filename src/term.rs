@@ -54,7 +54,9 @@ pub fn write_to_fd(fd: BorrowedFd, data: &[u8]) {
     let write_result = write(fd, data);
 
     match write_result {
-        Ok(_) => (),
+        Ok(size) => {
+            println!("Wrote {} bytes", size);
+        }
         Err(e) => eprintln!("Failed to write to file: {:?}", e),
     }
 }

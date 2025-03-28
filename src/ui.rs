@@ -28,12 +28,14 @@ impl Ui {
         match event {
             egui::Event::Key {
                 key: egui::Key::Enter,
+                pressed: true,
                 ..
             } => {
                 self.input.push('\n');
             }
             egui::Event::Key {
                 key: egui::Key::Escape,
+                pressed: true,
                 ..
             } => {
                 self.exit_flag
@@ -41,12 +43,23 @@ impl Ui {
             }
             egui::Event::Key {
                 key: egui::Key::Backspace,
+                pressed: true,
                 ..
             } => {
                 self.input.pop();
             }
-            egui::Event::Text(text) => {
-                self.input.push_str(text);
+            egui::Event::Key {
+                key,
+                pressed: true,
+                repeat: false,
+                modifiers,
+                ..
+            } => {
+                if modifiers.shift {
+                    self.input.push_str(&key.name());
+                } else {
+                    self.input.push_str(&key.name().to_lowercase());
+                }
             }
             _ => {}
         }
@@ -74,7 +87,6 @@ impl eframe::App for Ui {
         }
 
         if !self.input.is_empty() {
-            // self.output.push_str(&self.input);
             let _ = self.tx.try_send(self.input.as_bytes().to_vec());
 
             self.input.clear();
@@ -89,7 +101,7 @@ impl eframe::App for Ui {
 
             egui::ScrollArea::vertical().show(ui, |ui| {
                 ui.label(&self.output);
-                ui.label(&self.input);
+                // ui.label(&self.input);
             });
         });
     }
