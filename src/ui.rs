@@ -1,6 +1,6 @@
 use std::sync::{atomic::AtomicBool, Arc};
 
-use eframe::egui::{self, Rect, Widget};
+use eframe::egui::{self};
 use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::commands::Command;
@@ -61,6 +61,13 @@ impl Ui {
                 ..
             } => {
                 self.input.push('-');
+            }
+            egui::Event::Key {
+                key: egui::Key::ArrowUp,
+                pressed: true,
+                ..
+            } => {
+                self.tx.try_send(vec![27, 91, 65]).unwrap();
             }
             egui::Event::Key {
                 key,
