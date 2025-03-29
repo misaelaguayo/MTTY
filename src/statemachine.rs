@@ -20,6 +20,9 @@ impl Perform for StateMachine {
 
     fn execute(&mut self, byte: u8) {
         match byte {
+            0x08 => {
+                self.tx.try_send(Command::Backspace).unwrap();
+            }
             0x0a => {
                 self.tx.try_send(Command::NewLine).unwrap();
             }

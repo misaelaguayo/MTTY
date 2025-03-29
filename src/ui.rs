@@ -1,6 +1,6 @@
 use std::sync::{atomic::AtomicBool, Arc};
 
-use eframe::egui;
+use eframe::egui::{self, Rect, Widget};
 use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::commands::Command;
@@ -34,19 +34,33 @@ impl Ui {
                 self.input.push('\n');
             }
             egui::Event::Key {
-                key: egui::Key::Escape,
-                pressed: true,
-                ..
-            } => {
-                self.exit_flag
-                    .store(true, std::sync::atomic::Ordering::Relaxed);
-            }
-            egui::Event::Key {
                 key: egui::Key::Backspace,
                 pressed: true,
                 ..
             } => {
-                self.input.pop();
+                // ASCII code for backspace
+                self.tx.try_send(vec![8]).unwrap();
+            }
+            egui::Event::Key {
+                key: egui::Key::Escape,
+                pressed: true,
+                ..
+            } => {
+                self.tx.try_send(vec![27]).unwrap();
+            }
+            egui::Event::Key {
+                key: egui::Key::Space,
+                pressed: true,
+                ..
+            } => {
+                self.input.push(' ');
+            }
+            egui::Event::Key {
+                key: egui::Key::Minus,
+                pressed: true,
+                ..
+            } => {
+                self.input.push('-');
             }
             egui::Event::Key {
                 key,
@@ -55,10 +69,33 @@ impl Ui {
                 modifiers,
                 ..
             } => {
-                if modifiers.shift {
-                    self.input.push_str(&key.name());
-                } else {
-                    self.input.push_str(&key.name().to_lowercase());
+                match modifiers {
+                    egui::Modifiers { shift: true, .. } => {
+                        self.input.push_str(&key.name());
+                    }
+                    egui::Modifiers { ctrl: true, .. } => {
+                        match key.name() {
+                            "C" => {
+                                self.tx.try_send(vec![3]).unwrap();
+                            }
+                            "D" => {
+                                self.tx.try_send(vec![4]).unwrap();
+                            }
+                            "L" => {
+                                self.tx.try_send(vec![12]).unwrap();
+                            }
+                            "U" => {
+                                self.tx.try_send(vec![21]).unwrap();
+                            }
+                            "W" => {
+                                self.tx.try_send(vec![23]).unwrap();
+                            }
+                            _ => {}
+                        }
+                    }
+                    _ => {
+                        self.input.push_str(&key.name().to_lowercase());
+                    }
                 }
             }
             _ => {}
@@ -70,6 +107,9 @@ impl eframe::App for Ui {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         if let Some(data) = self.rx.try_recv().ok() {
             match data {
+                Command::Backspace => {
+                    self.output.pop();
+                }
                 Command::Print(c) => {
                     self.output.push(c);
                 }
@@ -100,8 +140,7 @@ impl eframe::App for Ui {
             });
 
             egui::ScrollArea::vertical().show(ui, |ui| {
-                ui.label(&self.output);
-                // ui.label(&self.input);
+                ui.monospace(&self.output);
             });
         });
     }
