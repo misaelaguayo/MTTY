@@ -10,4 +10,9 @@ pub enum Command {
     NewLine,
     Print(char),
     ResetStyles,
+    MoveCursor(i16, i16),
+    MoveCursorAbsoluteHorizontal(i16),
+    MoveCursorHorizontal(i16),
+    MoveCursorVertical(i16),
+    MoveCursorLineVertical(i16),
 }

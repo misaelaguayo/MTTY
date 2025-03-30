@@ -109,6 +109,40 @@ impl Perform for StateMachine {
                     }
                 }
             }
+            'H' => {
+                if params.len() == 0
+                {
+                    self.tx.try_send(Command::MoveCursor(0, 0)).unwrap();
+                }
+
+                params.iter().for_each(|p| {
+                    let m = p[0] as i16;
+                    let n = p[1] as i16;
+
+                    self.tx.try_send(Command::MoveCursor(m, n)).unwrap()
+                })
+            }
+            'A' => {
+                self.tx.try_send(Command::MoveCursorVertical(params.len() as i16)).unwrap();
+            }
+            'B' => {
+                self.tx.try_send(Command::MoveCursorVertical(params.len() as i16 * -1)).unwrap();
+            }
+            'C' => {
+                self.tx.try_send(Command::MoveCursorHorizontal(params.len() as i16)).unwrap();
+            }
+            'D' => {
+                self.tx.try_send(Command::MoveCursorHorizontal(params.len() as i16 * -1)).unwrap();
+            }
+            'E' => {
+                self.tx.try_send(Command::MoveCursorLineVertical(params.len() as i16)).unwrap();
+            }
+            'F' => {
+                self.tx.try_send(Command::MoveCursorLineVertical(params.len() as i16 * -1)).unwrap();
+            }
+            'G' => {
+                self.tx.try_send(Command::MoveCursorAbsoluteHorizontal(params.len() as i16)).unwrap();
+            }
             _ => {
                 println!(
                     "[csi_dispatch] params={:#?}, intermediates={:?}, ignore={:?}, char={:?}",

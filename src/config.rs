@@ -12,8 +12,8 @@ impl Default for Config {
         const HEIGHT: f32 = 480.0;
         const FONT_SIZE: f32 = 12.0;
 
-        let rows = (HEIGHT / FONT_SIZE) as u16;
-        let cols = (WIDTH / FONT_SIZE) as u16;
+        let rows = 35;
+        let cols = 106;
 
         Self {
             width: WIDTH,

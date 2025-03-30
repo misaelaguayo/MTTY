@@ -43,6 +43,7 @@ fn start_ui(
             .with_inner_size([config.width, config.height]),
         ..Default::default()
     };
+
     let _ = eframe::run_native(
         "MTTY",
         options,
@@ -52,7 +53,7 @@ fn start_ui(
             thread::spawn(|| {
                 redraw(ctx);
             });
-            return Ok(Box::new(ui::Ui::new(exit_flag, tx, rx)));
+            return Ok(Box::new(ui::Ui::new(config, exit_flag, tx, rx)));
         }),
     );
 }
