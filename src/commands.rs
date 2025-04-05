@@ -15,4 +15,8 @@ pub enum Command {
     MoveCursorHorizontal(i16),
     MoveCursorVertical(i16),
     MoveCursorLineVertical(i16),
+    ClearLineAfterCursor,
+    ClearLineBeforeCursor,
+    ClearLine,
+    ClearCount(i16),
 }

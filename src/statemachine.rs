@@ -163,6 +163,27 @@ impl Perform for StateMachine {
                     .try_send(Command::MoveCursorAbsoluteHorizontal(params.len() as i16))
                     .unwrap();
             }
+            'K' => {
+                if let Some(clear_type) = params.iter().next().map(|param| param[0]) {
+                    match clear_type {
+                        0 => {
+                            self.tx.try_send(Command::ClearLineAfterCursor).unwrap();
+                        }
+                        1 => {
+                            self.tx.try_send(Command::ClearLineBeforeCursor).unwrap();
+                        }
+                        2 => {
+                            self.tx.try_send(Command::ClearLine).unwrap();
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            'X' => {
+                if let Some(count) = params.iter().next().map(|param| param[0]) {
+                    self.tx.try_send(Command::ClearCount(count as i16)).unwrap();
+                }
+            }
             _ => {
                 println!(
                     "[csi_dispatch] params={:#?}, intermediates={:?}, ignore={:?}, char={:?}",

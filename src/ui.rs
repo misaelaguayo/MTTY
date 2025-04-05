@@ -130,6 +130,59 @@ impl Ui {
                 let new_x = self.pos.1 as i16 + x;
                 self.set_pos(new_x as usize, self.pos.0);
             }
+            Command::ClearLineAfterCursor => {
+                let (row, col) = self.pos;
+                for i in col..self.grid[row].len() {
+                    self.grid[row][i] = ' ';
+                }
+            }
+            Command::ClearLineBeforeCursor => {
+                let (row, col) = self.pos;
+                for i in 0..col {
+                    self.grid[row][i] = ' ';
+                }
+            }
+            Command::ClearLine => {
+                let (row, _) = self.pos;
+                for i in 0..self.grid[row].len() {
+                    self.grid[row][i] = ' ';
+                }
+            }
+            Command::ClearBelow => {
+                // first clear after cursor
+                let (row, col) = self.pos;
+                for i in col..self.grid[row].len() {
+                    self.grid[row][i] = ' ';
+                }
+
+                // then clear below
+                for i in row + 1..self.grid.len() {
+                    for j in 0..self.grid[i].len() {
+                        self.grid[i][j] = ' ';
+                    }
+                }
+            }
+            Command::ClearAbove => {
+                // first clear before cursor
+                let (row, col) = self.pos;
+                for i in 0..col {
+                    self.grid[row][i] = ' ';
+                }
+
+                // then clear above
+                for i in 0..row {
+                    for j in 0..self.grid[i].len() {
+                        self.grid[i][j] = ' ';
+                    }
+                }
+            }
+            Command::ClearCount(count) => {
+                let (row, col) = self.pos;
+                for i in 0..count {
+                    // TODO: check if the index is within bounds
+                    self.grid[row][col + i as usize] = ' ';
+                }
+            }
             _ => {}
         }
     }
@@ -187,6 +240,13 @@ impl Ui {
                 ..
             } => {
                 self.tx.try_send(vec![27, 91, 65]).unwrap();
+            }
+            egui::Event::Key {
+                key: egui::Key::Colon,
+                pressed: true,
+                ..
+            } => {
+                self.input.push(':');
             }
             egui::Event::Key {
                 key,

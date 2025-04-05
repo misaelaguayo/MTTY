@@ -69,8 +69,8 @@ pub struct Term {
 impl Term {
     pub fn new(config: &Config) -> Result<Self, Error> {
         let winsize = termios::Winsize {
-            ws_row: config.rows,
-            ws_col: config.cols,
+            ws_row: config.rows - 1,
+            ws_col: config.cols - 1,
             ws_xpixel: config.width as u16,
             ws_ypixel: config.height as u16,
         };
