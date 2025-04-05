@@ -5,6 +5,9 @@ use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::{commands::Command, config::Config};
 
+#[cfg(test)]
+mod tests;
+
 pub struct Ui {
     exit_flag: Arc<AtomicBool>,
     input: String,
@@ -12,7 +15,6 @@ pub struct Ui {
     rx: Receiver<Command>,
     pos: (usize, usize),
     grid: Vec<Vec<char>>,
-    updating: bool,
 }
 
 impl Ui {
@@ -29,17 +31,14 @@ impl Ui {
             rx,
             pos: (0, 0),
             grid: vec![vec![' '; config.rows as usize]; config.cols as usize],
-            updating: false,
         }
     }
 
     fn set_pos(&mut self, x: usize, y: usize) {
-        // println!("Setting position to: ({}, {})", x, y);
         self.pos = (x, y);
     }
 
     fn place_character_in_grid(&mut self, cols: u16, c: char) {
-        // println!("Placing character: {}", c);
         let (x, y) = self.pos;
 
         match c {
@@ -51,25 +50,12 @@ impl Ui {
             }
             _ => {
                 self.grid[x][y] = c;
+                self.set_pos(x + 1, y);
             }
         }
 
         if x >= cols as usize - 1 {
             self.set_pos(0, y + 1);
-        } else {
-            self.set_pos(x + 1, y);
-        }
-    }
-
-    #[cfg(debug_assertions)]
-    fn print_grid(&self) {
-        let rows = self.grid.len();
-        let cols = self.grid[0].len();
-        for row in self.grid.iter() {
-            for c in row.iter() {
-                print!("{}", c);
-            }
-            println!();
         }
     }
 
@@ -82,22 +68,57 @@ impl Ui {
         let cols = self.grid[0].len() as usize;
 
         if x > 0 {
+            (x, y) = self.pos;
+            self.grid[x][y] = ' ';
+
             self.set_pos(x - 1, y);
-            (x, y) = self.pos;
-            self.grid[x][y] = ' ';
         } else if y > 0 {
-            self.set_pos(x - 1, cols - 1);
-
             (x, y) = self.pos;
-
             self.grid[x][y] = ' ';
+
+            self.set_pos(cols - 1, y - 1);
         } else {
             self.grid[x][y] = ' ';
         }
     }
 
+    fn handle_command(&mut self, command: Command) {
+        let cols = self.grid.len() as u16;
+        match command {
+            Command::Backspace => {
+                self.delete_character();
+            }
+            Command::Print(c) => {
+                self.place_character_in_grid(cols, c);
+            }
+            Command::NewLine => {
+                self.place_character_in_grid(cols, '\n');
+            }
+            Command::CarriageReturn => {
+                self.place_character_in_grid(cols, '\r');
+            }
+            Command::ClearScreen => {
+                self.clear_screen();
+            }
+            Command::MoveCursor(x, y) => {
+                self.set_pos(x as usize, y as usize);
+            }
+            Command::MoveCursorAbsoluteHorizontal(x) => {
+                self.set_pos(x as usize, self.pos.1);
+            }
+            Command::MoveCursorHorizontal(x) => {
+                let new_x = self.pos.0 as i16 + x;
+                self.set_pos(new_x as usize, self.pos.1);
+            }
+            Command::MoveCursorVertical(y) => {
+                let new_y = self.pos.1 as i16 + y;
+                self.set_pos(self.pos.0, new_y as usize);
+            }
+            _ => {}
+        }
+    }
+
     fn handle_event(&mut self, event: &egui::Event) {
-        let cols = self.grid[0].len() as u16;
         match event {
             egui::Event::Key {
                 key: egui::Key::Enter,
@@ -120,8 +141,7 @@ impl Ui {
                 pressed: true,
                 ..
             } => {
-                // self.tx.try_send(vec![27]).unwrap();
-                self.print_grid();
+                self.tx.try_send(vec![27]).unwrap();
             }
             egui::Event::Key {
                 key: egui::Key::Space,
@@ -136,6 +156,13 @@ impl Ui {
                 ..
             } => {
                 self.input.push('-');
+            }
+            egui::Event::Key {
+                key: egui::Key::Period,
+                pressed: true,
+                ..
+            } => {
+                self.input.push('.');
             }
             egui::Event::Key {
                 key: egui::Key::ArrowUp,
@@ -193,38 +220,7 @@ impl eframe::App for Ui {
         let cols = 106 as u16;
 
         if let Some(data) = self.rx.try_recv().ok() {
-            match data {
-                Command::Backspace => {
-                    self.delete_character();
-                }
-                Command::Print(c) => {
-                    self.place_character_in_grid(cols, c);
-                }
-                Command::NewLine => {
-                    self.place_character_in_grid(cols, '\n');
-                }
-                Command::CarriageReturn => {
-                    self.place_character_in_grid(cols, '\r');
-                }
-                Command::ClearScreen => {
-                    self.clear_screen();
-                }
-                Command::MoveCursor(x, y) => {
-                    self.set_pos(x as usize, y as usize);
-                }
-                Command::MoveCursorAbsoluteHorizontal(x) => {
-                    self.set_pos(x as usize, self.pos.1);
-                }
-                Command::MoveCursorHorizontal(x) => {
-                    let new_x = self.pos.0 as i16 + x;
-                    self.set_pos(new_x as usize, self.pos.1);
-                }
-                Command::MoveCursorVertical(y) => {
-                    let new_y = self.pos.1 as i16 + y;
-                    self.set_pos(self.pos.0, new_y as usize);
-                }
-                _ => {}
-            }
+            self.handle_command(data);
         }
 
         if !self.input.is_empty() {
