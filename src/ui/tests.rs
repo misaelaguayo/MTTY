@@ -38,7 +38,7 @@ fn handle_command_backspace_should_remove_character_in_row() {
 
     ui.handle_command(Command::Backspace);
 
-    assert_eq!(ui.pos, (4, 10));
+    assert_eq!(ui.pos, (5, 9));
     assert_eq!(ui.grid[5][10], ' ');
 }
 
@@ -59,13 +59,13 @@ fn handle_command_backspace_should_wrap_to_previous_line_if_pos_at_beginning() {
         output_rx,
     );
 
-    ui.set_pos(0, 9);
-    ui.grid[0][9] = 'a';
+    ui.set_pos(9, 0);
+    ui.grid[9][0] = 'a';
 
     ui.handle_command(Command::Backspace);
 
-    assert_eq!(ui.pos, (9, 8));
-    assert_eq!(ui.grid[0][9], ' ');
+    assert_eq!(ui.pos, (8, 9));
+    assert_eq!(ui.grid[9][0], ' ');
 }
 
 #[test]
@@ -106,7 +106,7 @@ fn handle_command_new_line_should_move_cursor_to_next_line() {
     ui.set_pos(5, 8);
     ui.handle_command(Command::NewLine);
 
-    assert_eq!(ui.pos, (5, 9));
+    assert_eq!(ui.pos, (6, 8));
 }
 
 #[test]
@@ -124,7 +124,7 @@ fn handle_command_carriage_return_should_move_cursor_to_start_of_line() {
     ui.set_pos(5, 10);
     ui.handle_command(Command::CarriageReturn);
 
-    assert_eq!(ui.pos, (0, 10));
+    assert_eq!(ui.pos, (5, 0));
 }
 
 #[test]
@@ -165,7 +165,7 @@ fn handle_command_move_cursor_should_move_cursor_to_position() {
 
     ui.handle_command(Command::MoveCursor(5, 10));
 
-    assert_eq!(ui.pos, (5, 10));
+    assert_eq!(ui.pos, (10, 5));
 }
 
 #[test]
@@ -180,10 +180,10 @@ fn handle_command_move_cursor_absolute_horizontal_should_move_cursor_to_position
         output_rx,
     );
 
-    ui.set_pos(1, 0);
+    ui.set_pos(0, 1);
     ui.handle_command(Command::MoveCursorAbsoluteHorizontal(5));
 
-    assert_eq!(ui.pos, (5, 0));
+    assert_eq!(ui.pos, (0, 5));
 }
 
 #[test]
@@ -198,10 +198,10 @@ fn handle_command_move_cursor_horizontal_should_move_cursor_relative() {
         output_rx,
     );
 
-    ui.set_pos(5, 0);
+    ui.set_pos(0, 5);
     ui.handle_command(Command::MoveCursorHorizontal(3));
 
-    assert_eq!(ui.pos, (8, 0));
+    assert_eq!(ui.pos, (0, 8));
 }
 
 #[test]
@@ -219,5 +219,5 @@ fn handle_command_move_cursor_vertical_should_move_cursor_relative() {
     ui.set_pos(5, 1);
     ui.handle_command(Command::MoveCursorVertical(3));
 
-    assert_eq!(ui.pos, (5, 4));
+    assert_eq!(ui.pos, (4, 5));
 }

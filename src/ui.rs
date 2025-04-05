@@ -24,13 +24,29 @@ impl Ui {
         tx: Sender<Vec<u8>>,
         rx: Receiver<Command>,
     ) -> Self {
+        let grid = vec![vec![' '; config.cols as usize]; config.rows as usize];
+        println!("Grid size: {} x {}", config.rows, config.cols);
         Self {
             exit_flag,
             input: String::new(),
             tx,
             rx,
             pos: (0, 0),
-            grid: vec![vec![' '; config.rows as usize]; config.cols as usize],
+            grid,
+        }
+    }
+
+    #[cfg(debug_assertions)]
+    fn _pretty_print_grid(&self) {
+        for row in &self.grid {
+            for c in row {
+                if *c == ' ' {
+                    print!(".");
+                } else {
+                    print!("{}", c);
+                }
+            }
+            println!();
         }
     }
 
@@ -39,23 +55,23 @@ impl Ui {
     }
 
     fn place_character_in_grid(&mut self, cols: u16, c: char) {
-        let (x, y) = self.pos;
+        let (row, col) = self.pos;
 
         match c {
             '\n' => {
-                self.set_pos(x, y + 1);
+                self.set_pos(row + 1, col);
             }
             '\r' => {
-                self.set_pos(0, y);
+                self.set_pos(row, 0);
             }
             _ => {
-                self.grid[x][y] = c;
-                self.set_pos(x + 1, y);
+                self.grid[row][col] = c;
+                self.set_pos(row, col + 1);
             }
         }
 
-        if x >= cols as usize - 1 {
-            self.set_pos(0, y + 1);
+        if col >= cols as usize - 1 {
+            self.set_pos(row + 1, 0);
         }
     }
 
@@ -64,26 +80,26 @@ impl Ui {
     }
 
     fn delete_character(&mut self) {
-        let (mut x, mut y) = self.pos;
+        let (mut row, mut col) = self.pos;
         let cols = self.grid[0].len() as usize;
 
-        if x > 0 {
-            (x, y) = self.pos;
-            self.grid[x][y] = ' ';
+        if col > 0 {
+            (row, col) = self.pos;
+            self.grid[row][col] = ' ';
 
-            self.set_pos(x - 1, y);
-        } else if y > 0 {
-            (x, y) = self.pos;
-            self.grid[x][y] = ' ';
+            self.set_pos(row, col - 1);
+        } else if row > 0 {
+            (row, col) = self.pos;
+            self.grid[row][col] = ' ';
 
-            self.set_pos(cols - 1, y - 1);
+            self.set_pos(row - 1, cols - 1);
         } else {
-            self.grid[x][y] = ' ';
+            self.grid[row][col] = ' ';
         }
     }
 
     fn handle_command(&mut self, command: Command) {
-        let cols = self.grid.len() as u16;
+        let cols = self.grid[0].len() as u16;
         match command {
             Command::Backspace => {
                 self.delete_character();
@@ -101,18 +117,18 @@ impl Ui {
                 self.clear_screen();
             }
             Command::MoveCursor(x, y) => {
-                self.set_pos(x as usize, y as usize);
+                self.set_pos(y as usize, x as usize);
             }
-            Command::MoveCursorAbsoluteHorizontal(x) => {
-                self.set_pos(x as usize, self.pos.1);
+            Command::MoveCursorAbsoluteHorizontal(y) => {
+                self.set_pos(self.pos.0, y as usize);
             }
-            Command::MoveCursorHorizontal(x) => {
-                let new_x = self.pos.0 as i16 + x;
-                self.set_pos(new_x as usize, self.pos.1);
-            }
-            Command::MoveCursorVertical(y) => {
+            Command::MoveCursorHorizontal(y) => {
                 let new_y = self.pos.1 as i16 + y;
                 self.set_pos(self.pos.0, new_y as usize);
+            }
+            Command::MoveCursorVertical(x) => {
+                let new_x = self.pos.1 as i16 + x;
+                self.set_pos(new_x as usize, self.pos.0);
             }
             _ => {}
         }
@@ -141,6 +157,7 @@ impl Ui {
                 pressed: true,
                 ..
             } => {
+                // self.pretty_print_grid();
                 self.tx.try_send(vec![27]).unwrap();
             }
             egui::Event::Key {
@@ -216,8 +233,8 @@ impl eframe::App for Ui {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // TODO: Looks like accessing the row size and column size from the config struct
         // takes a long time. Currently using hardcoded values for the grid size.
-        let rows = 35;
-        let cols = 106 as u16;
+        // let rows = 35;
+        // let cols = 106 as u16;
 
         if let Some(data) = self.rx.try_recv().ok() {
             self.handle_command(data);
@@ -249,12 +266,12 @@ impl eframe::App for Ui {
                 .min_row_height(0.0001)
                 .spacing([0.0, 0.0])
                 .show(ui, |ui| {
-                    for row in 0..rows - 1 {
-                        for col in 0..cols - 1 {
-                            ui.monospace(self.grid[col as usize][row].to_string());
-                        }
+                    self.grid.iter().for_each(|row| {
+                        row.iter().for_each(|&c| {
+                            ui.monospace(c.to_string());
+                        });
                         ui.end_row();
-                    }
+                    });
                 });
         });
     }
