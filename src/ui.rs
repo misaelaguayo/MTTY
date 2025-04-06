@@ -59,7 +59,7 @@ impl Ui {
 
         match c {
             '\n' => {
-                self.set_pos(row + 1, col);
+                self.set_pos(row + 1, 0);
             }
             '\r' => {
                 self.set_pos(row, 0);
@@ -183,6 +183,11 @@ impl Ui {
                     self.grid[row][col + i as usize] = ' ';
                 }
             }
+            // Command::ReportCursorPosition => {
+            //     self.tx
+            //         .try_send(format!("\x1b[{};{}R", self.pos.0 + 1, self.pos.1 + 1).as_bytes().to_vec())
+            //         .unwrap();
+            // }
             _ => {}
         }
     }

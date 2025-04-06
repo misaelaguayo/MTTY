@@ -106,7 +106,7 @@ fn handle_command_new_line_should_move_cursor_to_next_line() {
     ui.set_pos(5, 8);
     ui.handle_command(Command::NewLine);
 
-    assert_eq!(ui.pos, (6, 8));
+    assert_eq!(ui.pos, (6, 0));
 }
 
 #[test]

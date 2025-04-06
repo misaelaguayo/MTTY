@@ -109,6 +109,20 @@ impl Perform for StateMachine {
                     }
                 }
             }
+            'n' => {
+                if intermediates.is_empty() {
+                    for param in params.iter() {
+                        match param[0] {
+                            6 => {
+                                self.tx
+                                    .try_send(Command::ReportCursorPosition)
+                                    .unwrap();
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
             'H' => {
                 if params.len() == 0 {
                     self.tx.try_send(Command::MoveCursor(0, 0)).unwrap();
