@@ -14,6 +14,7 @@ pub mod config;
 pub mod statemachine;
 pub mod term;
 pub mod ui;
+pub mod styles;
 
 #[tokio::main]
 async fn main() {

@@ -3,7 +3,7 @@ use std::sync::{atomic::AtomicBool, Arc};
 use eframe::egui::{self};
 use tokio::sync::mpsc::{Receiver, Sender};
 
-use crate::{commands::Command, config::Config};
+use crate::{commands::Command, config::Config, styles::Styles};
 
 #[cfg(test)]
 mod tests;
@@ -15,6 +15,7 @@ pub struct Ui {
     rx: Receiver<Command>,
     pos: (usize, usize),
     grid: Vec<Vec<char>>,
+    styles: Styles
 }
 
 impl Ui {
@@ -33,6 +34,7 @@ impl Ui {
             rx,
             pos: (0, 0),
             grid,
+            styles: Styles::default(),
         }
     }
 
@@ -95,6 +97,36 @@ impl Ui {
             self.set_pos(row - 1, cols - 1);
         } else {
             self.grid[row][col] = ' ';
+        }
+    }
+
+    fn handle_sgr_command(&mut self, command: i16) {
+        match command {
+            0 => {
+                // reset all styles
+                self.styles = Styles::default();
+            }
+            1 => {
+                // bold
+                self.styles.font_size = 20;
+            }
+            2 => {
+                // faint
+                self.styles.font_size = 14;
+            }
+            3 => {
+                // italic
+                self.styles.italic = true;
+            }
+            4 => {
+                // underline
+                self.styles.underline = true;
+            }
+            30..37 => {
+                // foreground color
+                self.styles.set_foreground_color_from_int(command);
+            }
+            _ => {}
         }
     }
 
@@ -182,6 +214,11 @@ impl Ui {
                     // TODO: check if the index is within bounds
                     self.grid[row][col + i as usize] = ' ';
                 }
+            }
+            Command::SGR(commands) => {
+                commands.iter().for_each(|command| {
+                    self.handle_sgr_command(*command);
+                });
             }
             // Command::ReportCursorPosition => {
             //     self.tx
@@ -333,7 +370,7 @@ impl eframe::App for Ui {
                 .show(ui, |ui| {
                     self.grid.iter().for_each(|row| {
                         row.iter().for_each(|&c| {
-                            ui.monospace(c.to_string());
+                            ui.monospace(egui::RichText::new(c.to_string()).color(self.styles.text_color.to_color32()));
                         });
                         ui.end_row();
                     });

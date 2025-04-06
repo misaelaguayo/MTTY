@@ -99,14 +99,15 @@ impl Perform for StateMachine {
             }
             'm' => {
                 if intermediates.is_empty() {
-                    for param in params.iter() {
-                        match param[0] {
-                            0 => {
-                                self.tx.try_send(Command::ResetStyles).unwrap();
-                            }
-                            _ => {}
-                        }
+                    if params.len() == 0 {
+                        self.tx.try_send(Command::ResetStyles).unwrap();
                     }
+
+                    self.tx
+                        .try_send(Command::SGR(
+                            params.iter().map(|param| param[0] as i16).collect(),
+                        ))
+                        .unwrap();
                 }
             }
             'n' => {
@@ -114,9 +115,7 @@ impl Perform for StateMachine {
                     for param in params.iter() {
                         match param[0] {
                             6 => {
-                                self.tx
-                                    .try_send(Command::ReportCursorPosition)
-                                    .unwrap();
+                                self.tx.try_send(Command::ReportCursorPosition).unwrap();
                             }
                             _ => {}
                         }

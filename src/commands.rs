@@ -20,4 +20,5 @@ pub enum Command {
     Print(char),
     ReportCursorPosition,
     ResetStyles,
+    SGR(Vec<i16>),
 }
