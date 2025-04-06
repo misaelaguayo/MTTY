@@ -1,3 +1,4 @@
+#[derive(Debug, Clone)]
 pub enum Command {
     AlternateScreenBuffer(bool),
     Backspace,

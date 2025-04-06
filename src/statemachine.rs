@@ -1,4 +1,4 @@
-use tokio::sync::mpsc::Sender;
+use tokio::sync::broadcast::Sender;
 use vte::{Params, Perform};
 
 use crate::commands::Command;
@@ -15,19 +15,19 @@ impl StateMachine {
 
 impl Perform for StateMachine {
     fn print(&mut self, c: char) {
-        self.tx.try_send(Command::Print(c)).unwrap();
+        self.tx.send(Command::Print(c)).unwrap();
     }
 
     fn execute(&mut self, byte: u8) {
         match byte {
             0x08 => {
-                self.tx.try_send(Command::Backspace).unwrap();
+                self.tx.send(Command::Backspace).unwrap();
             }
             0x0a => {
-                self.tx.try_send(Command::NewLine).unwrap();
+                self.tx.send(Command::NewLine).unwrap();
             }
             0x0d => {
-                self.tx.try_send(Command::CarriageReturn).unwrap();
+                self.tx.send(Command::CarriageReturn).unwrap();
             }
             _ => {
                 println!("[execute] {:02x}", byte);
@@ -61,23 +61,19 @@ impl Perform for StateMachine {
         match c {
             'h' => match params.len() {
                 1049 => {
-                    self.tx
-                        .try_send(Command::AlternateScreenBuffer(true))
-                        .unwrap();
+                    self.tx.send(Command::AlternateScreenBuffer(true)).unwrap();
                 }
                 2004 => {
-                    self.tx.try_send(Command::BrackPasteMode(true)).unwrap();
+                    self.tx.send(Command::BrackPasteMode(true)).unwrap();
                 }
                 _ => {}
             },
             'l' => match params.len() {
                 1049 => {
-                    self.tx
-                        .try_send(Command::AlternateScreenBuffer(false))
-                        .unwrap();
+                    self.tx.send(Command::AlternateScreenBuffer(false)).unwrap();
                 }
                 2004 => {
-                    self.tx.try_send(Command::BrackPasteMode(false)).unwrap();
+                    self.tx.send(Command::BrackPasteMode(false)).unwrap();
                 }
                 _ => {}
             },
@@ -85,13 +81,13 @@ impl Perform for StateMachine {
                 if let Some(clear_type) = params.iter().next().map(|param| param[0]) {
                     match clear_type {
                         0 => {
-                            self.tx.try_send(Command::ClearBelow).unwrap();
+                            self.tx.send(Command::ClearBelow).unwrap();
                         }
                         1 => {
-                            self.tx.try_send(Command::ClearAbove).unwrap();
+                            self.tx.send(Command::ClearAbove).unwrap();
                         }
                         2 => {
-                            self.tx.try_send(Command::ClearScreen).unwrap();
+                            self.tx.send(Command::ClearScreen).unwrap();
                         }
                         _ => {}
                     }
@@ -100,14 +96,12 @@ impl Perform for StateMachine {
             'm' => {
                 if intermediates.is_empty() {
                     if params.len() == 0 {
-                        self.tx.try_send(Command::ResetStyles).unwrap();
+                        self.tx.send(Command::ResetStyles).unwrap();
                     }
 
-                    self.tx
-                        .try_send(Command::SGR(
-                            params.iter().map(|param| param[0] as i16).collect(),
-                        ))
-                        .unwrap();
+                    self.tx.send(Command::SGR(
+                        params.iter().map(|param| param[0] as i16).collect(),
+                    )).unwrap();
                 }
             }
             'n' => {
@@ -115,7 +109,7 @@ impl Perform for StateMachine {
                     for param in params.iter() {
                         match param[0] {
                             6 => {
-                                self.tx.try_send(Command::ReportCursorPosition).unwrap();
+                                self.tx.send(Command::ReportCursorPosition).unwrap();
                             }
                             _ => {}
                         }
@@ -124,69 +118,58 @@ impl Perform for StateMachine {
             }
             'H' => {
                 if params.len() == 0 {
-                    self.tx.try_send(Command::MoveCursor(0, 0)).unwrap();
+                    self.tx.send(Command::MoveCursor(0, 0)).unwrap();
                 }
 
                 params.iter().for_each(|p| match p.len() {
                     1 => {
-                        self.tx
-                            .try_send(Command::MoveCursor(p[0] as i16, 0))
-                            .unwrap();
+                        self.tx.send(Command::MoveCursor(p[0] as i16, 0)).unwrap();
                     }
                     2 => {
-                        self.tx
-                            .try_send(Command::MoveCursor(p[0] as i16, p[1] as i16))
-                            .unwrap();
+                        self.tx.send(Command::MoveCursor(p[0] as i16, p[1] as i16)).unwrap();
                     }
                     _ => {}
                 })
             }
             'A' => {
                 self.tx
-                    .try_send(Command::MoveCursorVertical(params.len() as i16))
-                    .unwrap();
+                    .send(Command::MoveCursorVertical(params.len() as i16)).unwrap();
             }
             'B' => {
                 self.tx
-                    .try_send(Command::MoveCursorVertical(params.len() as i16 * -1))
-                    .unwrap();
+                    .send(Command::MoveCursorVertical(params.len() as i16 * -1)).unwrap();
             }
             'C' => {
                 self.tx
-                    .try_send(Command::MoveCursorHorizontal(params.len() as i16))
-                    .unwrap();
+                    .send(Command::MoveCursorHorizontal(params.len() as i16)).unwrap();
             }
             'D' => {
                 self.tx
-                    .try_send(Command::MoveCursorHorizontal(params.len() as i16 * -1))
-                    .unwrap();
+                    .send(Command::MoveCursorHorizontal(params.len() as i16 * -1)).unwrap();
             }
             'E' => {
                 self.tx
-                    .try_send(Command::MoveCursorLineVertical(params.len() as i16))
-                    .unwrap();
+                    .send(Command::MoveCursorLineVertical(params.len() as i16)).unwrap();
             }
             'F' => {
                 self.tx
-                    .try_send(Command::MoveCursorLineVertical(params.len() as i16 * -1))
-                    .unwrap();
+                    .send(Command::MoveCursorLineVertical(params.len() as i16 * -1)).unwrap();
             }
             'G' => {
                 self.tx
-                    .try_send(Command::MoveCursorAbsoluteHorizontal(params.len() as i16))
-                    .unwrap();
+                    .send(Command::MoveCursorAbsoluteHorizontal(params.len() as i16)).unwrap();
             }
             'K' => {
                 if let Some(clear_type) = params.iter().next().map(|param| param[0]) {
                     match clear_type {
                         0 => {
-                            self.tx.try_send(Command::ClearLineAfterCursor).unwrap();
+                            self.tx.send(Command::ClearLineAfterCursor).unwrap();
                         }
                         1 => {
-                            self.tx.try_send(Command::ClearLineBeforeCursor).unwrap();
+                            self.tx.send(Command::ClearLineBeforeCursor).unwrap();
                         }
                         2 => {
-                            self.tx.try_send(Command::ClearLine).unwrap();
+                            self.tx.send(Command::ClearLine).unwrap();
                         }
                         _ => {}
                     }
@@ -194,7 +177,7 @@ impl Perform for StateMachine {
             }
             'X' => {
                 if let Some(count) = params.iter().next().map(|param| param[0]) {
-                    self.tx.try_send(Command::ClearCount(count as i16)).unwrap();
+                    self.tx.send(Command::ClearCount(count as i16)).unwrap();
                 }
             }
             _ => {
