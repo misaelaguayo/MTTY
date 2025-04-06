@@ -1,5 +1,6 @@
 use std::env;
 use std::os::fd::{AsFd, AsRawFd};
+use std::os::unix::process::CommandExt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::{
@@ -8,7 +9,7 @@ use std::{
     process::{Child, Command},
 };
 
-use nix::libc::{self, c_int};
+use nix::libc::{self, c_int, TIOCSCTTY};
 use nix::unistd::read;
 use nix::unistd::write;
 use rustix::termios::{self, OptionalActions, Termios};
@@ -66,6 +67,20 @@ pub struct Term {
     pub child: Child,
 }
 
+fn set_controlling_terminal(fd: c_int) {
+    let res = unsafe {
+        #[allow(clippy::cast_lossless)]
+        libc::ioctl(fd, TIOCSCTTY as _, 0)
+    };
+
+    if res < 0 {
+        panic!(
+            "Failed to set controlling terminal: {}",
+            Error::last_os_error()
+        );
+    }
+}
+
 impl Term {
     pub fn new(config: &Config) -> Result<Self, Error> {
         let winsize = termios::Winsize {
@@ -83,14 +98,11 @@ impl Term {
 
     fn from_fd(master: OwnedFd, slave: OwnedFd) -> Result<Term, Error> {
         let master_fd = master.as_raw_fd();
+        let slave_fd = slave.as_raw_fd();
         if let Ok(mut termios) = termios::tcgetattr(&master) {
             enable_raw_mode(&mut termios);
 
-            // set read timeout
-            termios.special_codes[termios::SpecialCodeIndex::VTIME] = 1;
-
-            // set read minimum bytes
-            termios.special_codes[termios::SpecialCodeIndex::VMIN] = 0;
+            termios.input_modes.insert(termios::InputModes::IUTF8);
 
             let _ = termios::tcsetattr(&master, OptionalActions::Now, &termios);
         }
@@ -100,6 +112,34 @@ impl Term {
         builder.stdin(slave.try_clone()?);
         builder.stdout(slave.try_clone()?);
         builder.stderr(slave);
+
+        unsafe {
+            builder.pre_exec(move || {
+                // Create a new process group.
+                let err = libc::setsid();
+                if err == -1 {
+                    panic!(
+                        "Failed to create new process group: {}",
+                        Error::last_os_error()
+                    );
+                }
+
+                set_controlling_terminal(slave_fd);
+
+                // No longer need slave/master fds.
+                libc::close(slave_fd);
+                libc::close(master_fd);
+
+                libc::signal(libc::SIGCHLD, libc::SIG_DFL);
+                libc::signal(libc::SIGHUP, libc::SIG_DFL);
+                libc::signal(libc::SIGINT, libc::SIG_DFL);
+                libc::signal(libc::SIGQUIT, libc::SIG_DFL);
+                libc::signal(libc::SIGTERM, libc::SIG_DFL);
+                libc::signal(libc::SIGALRM, libc::SIG_DFL);
+
+                Ok(())
+            });
+        }
 
         match builder.spawn() {
             Ok(child) => {
@@ -119,14 +159,22 @@ impl Term {
     #[cfg(target_os = "macos")]
     fn default_shell_command() -> Command {
         let shell = env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
-        let shell_name = shell.split('/').last().unwrap();
 
         let user = env::var("USER").expect("Failed to get user");
 
         let mut command = Command::new("/usr/bin/login");
 
-        let exec = format!("exec -a {} {}", shell_name, shell);
-        command.args(["-flp", &user, shell_name, "-fc", &exec]);
+        let exec = format!("exec -l {}", shell);
+        command.args([
+            "-q",
+            "-flp",
+            &user,
+            "/bin/bash",
+            "--noprofile",
+            "--norc",
+            "-c",
+            &exec,
+        ]);
         command
     }
 }
