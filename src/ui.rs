@@ -1,7 +1,7 @@
 use std::sync::{atomic::AtomicBool, Arc};
 
 use eframe::egui::{self};
-use tokio::sync::broadcast::{Receiver, Sender};
+use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::{commands::Command, config::Config, styles::Styles};
 
@@ -15,7 +15,7 @@ pub struct Ui {
     rx: Receiver<Command>,
     pos: (usize, usize),
     grid: Vec<Vec<char>>,
-    styles: Styles,
+    styles: Styles
 }
 
 impl Ui {
@@ -222,7 +222,7 @@ impl Ui {
             }
             Command::ReportCursorPosition => {
                 self.tx
-                    .send(format!("\x1b[{};{}R", self.pos.0 + 1, self.pos.1 + 1).as_bytes().to_vec())
+                    .try_send(format!("\x1b[{};{}R", self.pos.0 + 1, self.pos.1 + 1).as_bytes().to_vec())
                     .unwrap();
             }
             _ => {}
@@ -245,7 +245,7 @@ impl Ui {
             } => {
                 // ASCII code for backspace
                 self.delete_character();
-                self.tx.send(vec![8]).unwrap();
+                self.tx.try_send(vec![8]).unwrap();
             }
             egui::Event::Key {
                 key: egui::Key::Escape,
@@ -253,7 +253,7 @@ impl Ui {
                 ..
             } => {
                 // self.pretty_print_grid();
-                self.tx.send(vec![27]).unwrap();
+                self.tx.try_send(vec![27]).unwrap();
             }
             egui::Event::Key {
                 key: egui::Key::Space,
@@ -281,7 +281,7 @@ impl Ui {
                 pressed: true,
                 ..
             } => {
-                self.tx.send(vec![27, 91, 65]).unwrap();
+                self.tx.try_send(vec![27, 91, 65]).unwrap();
             }
             egui::Event::Key {
                 key: egui::Key::Colon,
@@ -302,23 +302,23 @@ impl Ui {
                 }
                 egui::Modifiers { ctrl: true, .. } => match key.name() {
                     "C" => {
-                        self.tx.send(vec![3]).unwrap();
+                        self.tx.try_send(vec![3]).unwrap();
                     }
                     "D" => {
-                        self.tx.send(vec![4]).unwrap();
+                        self.tx.try_send(vec![4]).unwrap();
                     }
                     "L" => {
-                        self.tx.send(vec![12]).unwrap();
+                        self.tx.try_send(vec![12]).unwrap();
                     }
                     "U" => {
-                        self.tx.send(vec![21]).unwrap();
+                        self.tx.try_send(vec![21]).unwrap();
                     }
                     "W" => {
-                        self.tx.send(vec![23]).unwrap();
+                        self.tx.try_send(vec![23]).unwrap();
                     }
                     "R" => {
                         // dev command to display current cursor position
-                        self.tx.send("\\x1b[6n".as_bytes().to_vec()).unwrap();
+                        self.tx.try_send("\\x1b[6n".as_bytes().to_vec()).unwrap();
                     }
                     _ => {}
                 },
@@ -338,7 +338,7 @@ impl eframe::App for Ui {
         }
 
         if !self.input.is_empty() {
-            let _ = self.tx.send(self.input.as_bytes().to_vec());
+            let _ = self.tx.try_send(self.input.as_bytes().to_vec());
 
             self.input.clear();
         }
@@ -365,10 +365,7 @@ impl eframe::App for Ui {
                 .show(ui, |ui| {
                     self.grid.iter().for_each(|row| {
                         row.iter().for_each(|&c| {
-                            ui.monospace(
-                                egui::RichText::new(c.to_string())
-                                    .color(self.styles.text_color.to_color32()),
-                            );
+                            ui.monospace(egui::RichText::new(c.to_string()).color(self.styles.text_color.to_color32()));
                         });
                         ui.end_row();
                     });

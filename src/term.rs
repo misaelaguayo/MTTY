@@ -14,7 +14,7 @@ use nix::unistd::read;
 use nix::unistd::write;
 use rustix::termios::{self, OptionalActions, Termios};
 use rustix_openpty::openpty;
-use tokio::sync::broadcast::{self, Receiver};
+use tokio::sync::mpsc::{self, Receiver};
 
 use crate::commands::Command as TermCommand;
 use crate::config::Config;
@@ -200,7 +200,7 @@ fn enable_raw_mode(termios: &mut Termios) {
 pub fn spawn_read_thread(
     fd: i32,
     read_exit_flag: Arc<AtomicBool>,
-    output_tx: broadcast::Sender<TermCommand>,
+    output_tx: mpsc::Sender<TermCommand>,
 ) {
     tokio::spawn(async move {
         let mut statemachine = vte::Parser::new();
@@ -225,8 +225,7 @@ pub fn spawn_write_thread(
 ) {
     tokio::spawn(async move {
         loop {
-            if !input_rx.is_empty() {
-                let data = input_rx.recv().await.unwrap();
+            if let Some(data) = input_rx.recv().await {
                 write_to_fd(write_fd.as_fd(), &data);
             }
 
