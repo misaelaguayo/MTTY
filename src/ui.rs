@@ -220,11 +220,11 @@ impl Ui {
                     self.handle_sgr_command(*command);
                 });
             }
-            // Command::ReportCursorPosition => {
-            //     self.tx
-            //         .send(format!("\x1b[{};{}R", self.pos.0 + 1, self.pos.1 + 1).as_bytes().to_vec())
-            //         .unwrap();
-            // }
+            Command::ReportCursorPosition => {
+                self.tx
+                    .send(format!("\x1b[{};{}R", self.pos.0 + 1, self.pos.1 + 1).as_bytes().to_vec())
+                    .unwrap();
+            }
             _ => {}
         }
     }
@@ -333,12 +333,7 @@ impl Ui {
 
 impl eframe::App for Ui {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // TODO: Looks like accessing the row size and column size from the config struct
-        // takes a long time. Currently using hardcoded values for the grid size.
-        // let rows = 35;
-        // let cols = 106 as u16;
-
-        if let Some(data) = self.rx.try_recv().ok() {
+        while let Ok(data) = self.rx.try_recv() {
             self.handle_command(data);
         }
 
