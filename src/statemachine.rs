@@ -51,10 +51,32 @@ impl Perform for StateMachine {
     }
 
     fn osc_dispatch(&mut self, params: &[&[u8]], bell_terminated: bool) {
-        println!(
-            "[osc_dispatch] params={:?} bell_terminated={}",
-            params, bell_terminated
-        );
+        match params.len() {
+            0 => {
+                println!(
+                    "[osc_dispatch] params={:?} text={}",
+                    params[0], String::from_utf8_lossy(params[0])
+                );
+            }
+            1 => {
+                println!(
+                    "[osc_dispatch] params={:?} text={}",
+                    params[0], String::from_utf8_lossy(params[0])
+                );
+            }
+            2 => {
+                println!(
+                    "[osc_dispatch] params={:?} text={}",
+                    params[0], String::from_utf8_lossy(params[1])
+                );
+            }
+            _ => {
+                println!(
+                    "[osc_dispatch] params={:?} bell_terminated={}",
+                    params, bell_terminated
+                );
+            }
+        }
     }
 
     fn csi_dispatch(&mut self, params: &Params, intermediates: &[u8], ignore: bool, c: char) {

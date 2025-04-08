@@ -211,7 +211,9 @@ impl Ui {
             Command::ClearCount(count) => {
                 let (row, col) = self.pos;
                 for i in 0..count {
-                    // TODO: check if the index is within bounds
+                    if col + i as usize >= self.grid[row].len() {
+                        break;
+                    }
                     self.grid[row][col + i as usize] = ' ';
                 }
             }
