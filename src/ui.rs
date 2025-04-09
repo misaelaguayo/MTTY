@@ -1,6 +1,6 @@
 use std::sync::{atomic::AtomicBool, Arc};
 
-use eframe::egui::{self};
+use eframe::egui::{self, Color32};
 use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::{commands::Command, config::Config, styles::Styles};
@@ -260,100 +260,56 @@ impl Ui {
     fn handle_event(&mut self, event: &egui::Event) {
         match event {
             egui::Event::Key {
-                key: egui::Key::Enter,
-                pressed: true,
-                ..
-            } => {
-                self.input.push('\n');
-            }
-            egui::Event::Key {
-                key: egui::Key::Backspace,
-                pressed: true,
-                ..
-            } => {
-                // ASCII code for backspace
-                self.delete_character();
-                self.tx.try_send(vec![8]).unwrap();
-            }
-            egui::Event::Key {
-                key: egui::Key::Escape,
-                pressed: true,
-                ..
-            } => {
-                // self.pretty_print_grid();
-                self.tx.try_send(vec![27]).unwrap();
-            }
-            egui::Event::Key {
-                key: egui::Key::Space,
-                pressed: true,
-                ..
-            } => {
-                self.input.push(' ');
-            }
-            egui::Event::Key {
-                key: egui::Key::Minus,
-                pressed: true,
-                ..
-            } => {
-                self.input.push('-');
-            }
-            egui::Event::Key {
-                key: egui::Key::Period,
-                pressed: true,
-                ..
-            } => {
-                self.input.push('.');
-            }
-            egui::Event::Key {
-                key: egui::Key::ArrowUp,
-                pressed: true,
-                ..
-            } => {
-                self.tx.try_send(vec![27, 91, 65]).unwrap();
-            }
-            egui::Event::Key {
-                key: egui::Key::Colon,
-                pressed: true,
-                ..
-            } => {
-                self.input.push(':');
-            }
-            egui::Event::Key {
                 key,
-                pressed: true,
-                repeat: false,
                 modifiers,
+                repeat: false,
+                pressed: true,
                 ..
-            } => match modifiers {
-                egui::Modifiers { shift: true, .. } => {
-                    self.input.push_str(&key.name());
-                }
-                egui::Modifiers { ctrl: true, .. } => match key.name() {
-                    "C" => {
-                        self.tx.try_send(vec![3]).unwrap();
+            } => {
+                match key {
+                    egui::Key::Backspace => {
+                        self.tx.try_send(vec![8]).unwrap();
                     }
-                    "D" => {
-                        self.tx.try_send(vec![4]).unwrap();
+                    egui::Key::Escape => {
+                        self.tx.try_send(vec![27]).unwrap();
                     }
-                    "L" => {
-                        self.tx.try_send(vec![12]).unwrap();
+                    egui::Key::ArrowUp => {
+                        self.tx.try_send(vec![27, 91, 65]).unwrap();
                     }
-                    "U" => {
-                        self.tx.try_send(vec![21]).unwrap();
+                    egui::Key::Enter => {
+                        self.tx.try_send(vec![13]).unwrap();
                     }
-                    "W" => {
-                        self.tx.try_send(vec![23]).unwrap();
-                    }
-                    "R" => {
-                        // dev command to display current cursor position
-                        self.tx.try_send("\\x1b[6n".as_bytes().to_vec()).unwrap();
+                    egui::Key::Tab => {
+                        self.tx.try_send(vec![9]).unwrap();
                     }
                     _ => {}
-                },
-                _ => {
-                    self.input.push_str(&key.name().to_lowercase());
                 }
-            },
+
+                match modifiers {
+                    egui::Modifiers { ctrl: true, .. } => match key.name() {
+                        "C" => {
+                            self.tx.try_send(vec![3]).unwrap();
+                        }
+                        "D" => {
+                            self.tx.try_send(vec![4]).unwrap();
+                        }
+                        "L" => {
+                            self.tx.try_send(vec![12]).unwrap();
+                        }
+                        "U" => {
+                            self.tx.try_send(vec![21]).unwrap();
+                        }
+                        "W" => {
+                            self.tx.try_send(vec![23]).unwrap();
+                        }
+                        _ => {}
+                    },
+                    _ => {}
+                }
+            }
+            egui::Event::Text(text) => {
+                self.input.push_str(text);
+            }
             _ => {}
         }
     }
@@ -391,15 +347,33 @@ impl eframe::App for Ui {
                 .min_row_height(0.0001)
                 .spacing([0.0, 0.0])
                 .show(ui, |ui| {
-                    self.grid.iter().for_each(|row| {
-                        row.iter().for_each(|&c| {
-                            ui.monospace(
-                                egui::RichText::new(c.to_string())
-                                    .color(self.styles.text_color.to_color32()),
-                            );
-                        });
+                    // self.grid.iter().for_each(|row| {
+                    //     row.iter().for_each(|&c| {
+                    //         ui.monospace(
+                    //             egui::RichText::new(c.to_string())
+                    //                 .color(self.styles.text_color.to_color32()),
+                    //         );
+                    //     });
+                    //     ui.end_row();
+                    // });
+
+                    for (i, row) in self.grid.iter().enumerate() {
+                        for (j, c) in row.iter().enumerate() {
+                            if i == self.pos.0 && j == self.pos.1 {
+                                ui.monospace(
+                                    egui::RichText::new(c.to_string())
+                                        .color(self.styles.text_color.to_color32())
+                                        .background_color(Color32::WHITE),
+                                );
+                            } else {
+                                ui.monospace(
+                                    egui::RichText::new(c.to_string())
+                                        .color(self.styles.text_color.to_color32()),
+                                );
+                            }
+                        }
                         ui.end_row();
-                    });
+                    }
                 });
         });
     }
