@@ -15,7 +15,7 @@ pub struct Ui {
     rx: Receiver<Command>,
     pos: (usize, usize),
     grid: Vec<Vec<char>>,
-    styles: Styles
+    styles: Styles,
 }
 
 impl Ui {
@@ -140,7 +140,7 @@ impl Ui {
                 self.place_character_in_grid(cols, c);
             }
             Command::NewLine => {
-                self.place_character_in_grid(cols, '\n');
+                self.set_pos(self.pos.0 + 1, 0);
             }
             Command::CarriageReturn => {
                 self.place_character_in_grid(cols, '\r');
@@ -224,7 +224,11 @@ impl Ui {
             }
             Command::ReportCursorPosition => {
                 self.tx
-                    .try_send(format!("\x1b[{};{}R", self.pos.0 + 1, self.pos.1 + 1).as_bytes().to_vec())
+                    .try_send(
+                        format!("\x1b[{};{}R", self.pos.0 + 1, self.pos.1 + 1)
+                            .as_bytes()
+                            .to_vec(),
+                    )
                     .unwrap();
             }
             _ => {}
@@ -367,7 +371,10 @@ impl eframe::App for Ui {
                 .show(ui, |ui| {
                     self.grid.iter().for_each(|row| {
                         row.iter().for_each(|&c| {
-                            ui.monospace(egui::RichText::new(c.to_string()).color(self.styles.text_color.to_color32()));
+                            ui.monospace(
+                                egui::RichText::new(c.to_string())
+                                    .color(self.styles.text_color.to_color32()),
+                            );
                         });
                         ui.end_row();
                     });

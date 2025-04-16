@@ -1,13 +1,14 @@
-use eframe::{egui::{self, FontFamily, FontId, TextStyle}, epaint::text::{FontInsert, InsertFontFamily}};
+use eframe::{
+    egui::{self, FontFamily, FontId, TextStyle},
+    epaint::text::{FontInsert, InsertFontFamily},
+};
 
 use crate::config::Config;
 
 fn add_font(ctx: &egui::Context) {
     ctx.add_font(FontInsert::new(
         "hack-font",
-        egui::FontData::from_static(include_bytes!(
-            "../assets/Hack-Regular.ttf"
-        )),
+        egui::FontData::from_static(include_bytes!("../assets/Hack-Regular.ttf")),
         vec![
             InsertFontFamily {
                 family: egui::FontFamily::Proportional,
@@ -64,4 +65,3 @@ pub fn configure_text_styles(ctx: &egui::Context, config: &Config) {
     .into();
     ctx.set_style(style);
 }
-

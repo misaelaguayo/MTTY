@@ -20,6 +20,8 @@ use crate::commands::Command as TermCommand;
 use crate::config::Config;
 use crate::statemachine;
 
+use vte::ansi::{self, Processor};
+
 // Steps to create a terminal
 // Call openpty to get a master and slave fd
 // The master fd is used to read and write to the terminal
@@ -203,12 +205,12 @@ pub fn spawn_read_thread(
     output_tx: mpsc::Sender<TermCommand>,
 ) {
     tokio::spawn(async move {
-        let mut statemachine = vte::Parser::new();
-        let mut performer = statemachine::StateMachine::new(output_tx);
+        let mut processor: Processor = Processor::new();
+        let mut statemachine = statemachine::StateMachine::new(output_tx);
 
         loop {
             if let Some(data) = read_from_raw_fd(fd) {
-                statemachine.advance(&mut performer, &data);
+                processor.advance(&mut statemachine, &data);
             }
 
             if read_exit_flag.load(Ordering::Relaxed) {

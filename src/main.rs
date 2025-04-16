@@ -11,11 +11,11 @@ use tokio::sync::mpsc;
 
 pub mod commands;
 pub mod config;
+pub mod fonts;
 pub mod statemachine;
+pub mod styles;
 pub mod term;
 pub mod ui;
-pub mod styles;
-pub mod fonts;
 
 #[tokio::main]
 async fn main() {
@@ -27,8 +27,9 @@ async fn main() {
     let term = term::Term::new(&config).unwrap();
     let read_fd = term.parent.try_clone().unwrap();
     let write_fd = term.parent.try_clone().unwrap();
-    let (output_tx, output_rx) = mpsc::channel(1000);
-    let (input_tx, input_rx): (mpsc::Sender<Vec<u8>>, mpsc::Receiver<Vec<u8>>) = mpsc::channel(100);
+    let (output_tx, output_rx) = mpsc::channel(10000);
+    let (input_tx, input_rx): (mpsc::Sender<Vec<u8>>, mpsc::Receiver<Vec<u8>>) =
+        mpsc::channel(10000);
 
     term::spawn_read_thread(read_fd.as_raw_fd(), exit_flag.clone(), output_tx);
     term::spawn_write_thread(write_fd, input_rx, exit_flag.clone());
@@ -63,7 +64,7 @@ fn start_ui(
 }
 
 fn _redraw(ctx: egui::Context) {
-    // This function was originally used because egui does not 
+    // This function was originally used because egui does not
     // update the screen if there are no events.
     // We needed to be able to update the screen when we got
     // Some data from the terminal.
