@@ -188,7 +188,7 @@ impl Ui {
                 self.clear_screen();
             }
             Command::MoveCursor(x, y) => {
-                self.set_pos(y as usize, x as usize);
+                self.set_pos(x as usize, y as usize);
             }
             Command::MoveCursorAbsoluteHorizontal(y) => {
                 self.set_pos(self.pos.0, y as usize);
@@ -405,7 +405,7 @@ impl eframe::App for Ui {
                 .spacing([0.0, 0.0])
                 .show(ui, |ui| {
                     // Show only the last `rows` rows of the grid
-                    let start_row = self.grid.len() - self.rows;
+                    let start_row = 0;
 
                     for (i, row) in self.grid[start_row..].iter().enumerate() {
                         for (j, c) in row.iter().enumerate() {
