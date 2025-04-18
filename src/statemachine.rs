@@ -1,8 +1,6 @@
 use tokio::sync::mpsc::Sender;
 use vte::ansi::{
-    cursor_icon, Attr, CharsetIndex, ClearMode, CursorShape, CursorStyle, Handler, Hyperlink,
-    KeyboardModes, KeyboardModesApplyBehavior, LineClearMode, Mode, ModifyOtherKeys, PrivateMode,
-    Rgb, ScpCharPath, ScpUpdateMode, StandardCharset, TabulationClearMode,
+    cursor_icon, Attr, CharsetIndex, ClearMode, CursorShape, CursorStyle, Handler, Hyperlink, KeyboardModes, KeyboardModesApplyBehavior, LineClearMode, Mode, ModifyOtherKeys, NamedPrivateMode, PrivateMode, Rgb, ScpCharPath, ScpUpdateMode, StandardCharset, TabulationClearMode
 };
 
 use crate::commands::Command;
@@ -98,7 +96,7 @@ impl Handler for StateMachine {
     }
 
     fn put_tab(&mut self, _count: u16) {
-        println!("Put tab");
+        self.tx.try_send(Command::PutTab).unwrap();
     }
 
     fn backspace(&mut self) {
@@ -236,6 +234,12 @@ impl Handler for StateMachine {
 
     fn set_private_mode(&mut self, mode: PrivateMode) {
         println!("Set private mode: {:?}", mode);
+        match mode {
+            PrivateMode::Named(NamedPrivateMode::ShowCursor) => {
+                self.tx.try_send(Command::ShowCursor).unwrap();
+            }
+            _ => {}
+        }
     }
 
     fn unset_private_mode(&mut self, _mode: PrivateMode) {

@@ -130,6 +130,13 @@ impl Ui {
         }
     }
 
+    fn show_cursor(&mut self) {
+        let (row, col) = self.pos;
+        if row < self.grid.len() && col < self.grid[row].len() {
+            self.grid[row][col] = '|';
+        }
+    }
+
     fn handle_command(&mut self, command: Command) {
         let cols = self.grid[0].len() as u16;
         match command {
@@ -225,7 +232,7 @@ impl Ui {
             Command::ReportCursorPosition => {
                 self.tx
                     .try_send(
-                        format!("\x1b[{};{}R", self.pos.0 + 1, self.pos.1 + 1)
+                        format!("\x1b[{};{}R", self.pos.0, self.pos.1)
                             .as_bytes()
                             .to_vec(),
                     )
@@ -233,6 +240,18 @@ impl Ui {
             }
             Command::LineFeed => {
                 self.set_pos(self.pos.0 + 1, 0);
+            }
+            Command::ShowCursor => {
+                self.show_cursor();
+            }
+            Command::PutTab => {
+                let (row, col) = self.pos;
+                if col < self.grid[row].len() - 5 {
+                    for i in col..col + 4 {
+                        self.grid[row][i] = ' ';
+                        self.set_pos(row, i + 1);
+                    }
+                }
             }
             _ => {}
         }

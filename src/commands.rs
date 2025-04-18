@@ -19,7 +19,9 @@ pub enum Command {
     MoveCursorVertical(i16),
     NewLine,
     Print(char),
+    PutTab,
     ReportCursorPosition,
     ResetStyles,
     SGR(Vec<i16>),
+    ShowCursor,
 }
