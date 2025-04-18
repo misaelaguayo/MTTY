@@ -1,5 +1,9 @@
 use tokio::sync::mpsc::Sender;
-use vte::ansi::Handler;
+use vte::ansi::{
+    cursor_icon, Attr, CharsetIndex, ClearMode, CursorShape, CursorStyle, Handler, Hyperlink,
+    KeyboardModes, KeyboardModesApplyBehavior, LineClearMode, Mode, ModifyOtherKeys, PrivateMode,
+    Rgb, ScpCharPath, ScpUpdateMode, StandardCharset, TabulationClearMode,
+};
 
 use crate::commands::Command;
 
@@ -18,11 +22,11 @@ impl Handler for StateMachine {
         println!("Set title");
     }
 
-    fn set_cursor_style(&mut self, _: Option<vte::ansi::CursorStyle>) {
+    fn set_cursor_style(&mut self, _: Option<CursorStyle>) {
         println!("Set cursor style");
     }
 
-    fn set_cursor_shape(&mut self, shape: vte::ansi::CursorShape) {
+    fn set_cursor_shape(&mut self, shape: CursorShape) {
         println!("Set cursor shape: {:?}", shape);
     }
 
@@ -165,36 +169,36 @@ impl Handler for StateMachine {
         println!("Restore cursor position");
     }
 
-    fn clear_line(&mut self, mode: vte::ansi::LineClearMode) {
+    fn clear_line(&mut self, mode: LineClearMode) {
         match mode {
-            vte::ansi::LineClearMode::All => {
+            LineClearMode::All => {
                 self.tx.try_send(Command::ClearLine).unwrap();
             }
-            vte::ansi::LineClearMode::Left => {
+            LineClearMode::Left => {
                 self.tx.try_send(Command::ClearLineBeforeCursor).unwrap();
             }
-            vte::ansi::LineClearMode::Right => {
+            LineClearMode::Right => {
                 self.tx.try_send(Command::ClearLineAfterCursor).unwrap();
             }
         }
     }
 
-    fn clear_screen(&mut self, mode: vte::ansi::ClearMode) {
+    fn clear_screen(&mut self, mode: ClearMode) {
         match mode {
-            vte::ansi::ClearMode::All => {
+            ClearMode::All => {
                 self.tx.try_send(Command::ClearScreen).unwrap();
             }
-            vte::ansi::ClearMode::Above => {
+            ClearMode::Above => {
                 self.tx.try_send(Command::ClearAbove).unwrap();
             }
-            vte::ansi::ClearMode::Below => {
+            ClearMode::Below => {
                 self.tx.try_send(Command::ClearBelow).unwrap();
             }
-            vte::ansi::ClearMode::Saved => {}
+            ClearMode::Saved => {}
         }
     }
 
-    fn clear_tabs(&mut self, _mode: vte::ansi::TabulationClearMode) {
+    fn clear_tabs(&mut self, _mode: TabulationClearMode) {
         println!("Clear tabs");
     }
 
@@ -210,35 +214,35 @@ impl Handler for StateMachine {
         println!("Reverse index");
     }
 
-    fn terminal_attribute(&mut self, attr: vte::ansi::Attr) {
-        if attr == vte::ansi::Attr::Reset {
+    fn terminal_attribute(&mut self, attr: Attr) {
+        if attr == Attr::Reset {
             self.tx.try_send(Command::ResetStyles).unwrap();
         } else {
             // self.tx.try_send(Command::SGR(vec![])).unwrap();
         }
     }
 
-    fn set_mode(&mut self, _mode: vte::ansi::Mode) {
+    fn set_mode(&mut self, _mode: Mode) {
         println!("Set mode");
     }
 
-    fn unset_mode(&mut self, _mode: vte::ansi::Mode) {
+    fn unset_mode(&mut self, _mode: Mode) {
         println!("Unset mode");
     }
 
-    fn report_mode(&mut self, _mode: vte::ansi::Mode) {
+    fn report_mode(&mut self, _mode: Mode) {
         println!("Report mode");
     }
 
-    fn set_private_mode(&mut self, mode: vte::ansi::PrivateMode) {
+    fn set_private_mode(&mut self, mode: PrivateMode) {
         println!("Set private mode: {:?}", mode);
     }
 
-    fn unset_private_mode(&mut self, _mode: vte::ansi::PrivateMode) {
+    fn unset_private_mode(&mut self, _mode: PrivateMode) {
         println!("Unset private mode");
     }
 
-    fn report_private_mode(&mut self, _mode: vte::ansi::PrivateMode) {
+    fn report_private_mode(&mut self, _mode: PrivateMode) {
         println!("Report private mode");
     }
 
@@ -254,15 +258,15 @@ impl Handler for StateMachine {
         println!("Unset keypad application mode");
     }
 
-    fn set_active_charset(&mut self, _: vte::ansi::CharsetIndex) {
+    fn set_active_charset(&mut self, _: CharsetIndex) {
         println!("Set active charset");
     }
 
-    fn configure_charset(&mut self, _: vte::ansi::CharsetIndex, _: vte::ansi::StandardCharset) {
+    fn configure_charset(&mut self, _: CharsetIndex, _: StandardCharset) {
         println!("Configure charset");
     }
 
-    fn set_color(&mut self, _: usize, _: vte::ansi::Rgb) {
+    fn set_color(&mut self, _: usize, _: Rgb) {
         println!("Set color");
     }
 
@@ -302,11 +306,11 @@ impl Handler for StateMachine {
         println!("Text area size chars");
     }
 
-    fn set_hyperlink(&mut self, _: Option<vte::ansi::Hyperlink>) {
+    fn set_hyperlink(&mut self, _: Option<Hyperlink>) {
         println!("Set hyperlink");
     }
 
-    fn set_mouse_cursor_icon(&mut self, _: vte::ansi::cursor_icon::CursorIcon) {
+    fn set_mouse_cursor_icon(&mut self, _: cursor_icon::CursorIcon) {
         println!("Set mouse cursor icon");
     }
 
@@ -314,7 +318,7 @@ impl Handler for StateMachine {
         println!("Report keyboard mode");
     }
 
-    fn push_keyboard_mode(&mut self, _mode: vte::ansi::KeyboardModes) {
+    fn push_keyboard_mode(&mut self, _mode: KeyboardModes) {
         println!("Push keyboard mode");
     }
 
@@ -322,15 +326,11 @@ impl Handler for StateMachine {
         println!("Pop keyboard modes");
     }
 
-    fn set_keyboard_mode(
-        &mut self,
-        _mode: vte::ansi::KeyboardModes,
-        _behavior: vte::ansi::KeyboardModesApplyBehavior,
-    ) {
+    fn set_keyboard_mode(&mut self, _mode: KeyboardModes, _behavior: KeyboardModesApplyBehavior) {
         println!("Set keyboard mode");
     }
 
-    fn set_modify_other_keys(&mut self, _mode: vte::ansi::ModifyOtherKeys) {
+    fn set_modify_other_keys(&mut self, _mode: ModifyOtherKeys) {
         println!("Set modify other keys");
     }
 
@@ -338,11 +338,7 @@ impl Handler for StateMachine {
         println!("Report modify other keys");
     }
 
-    fn set_scp(
-        &mut self,
-        _char_path: vte::ansi::ScpCharPath,
-        _update_mode: vte::ansi::ScpUpdateMode,
-    ) {
+    fn set_scp(&mut self, _char_path: ScpCharPath, _update_mode: ScpUpdateMode) {
         println!("Set SCP");
     }
 }
