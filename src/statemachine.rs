@@ -6,7 +6,7 @@ use vte::ansi::{
     TabulationClearMode,
 };
 
-use crate::commands::Command;
+use crate::commands::{Command, IdentifyTerminalMode};
 
 pub struct StateMachine {
     tx: Sender<Command>,
@@ -69,13 +69,37 @@ impl Handler for StateMachine {
             .unwrap();
     }
 
-    fn identify_terminal(&mut self, _intermediate: Option<char>) {
+    fn identify_terminal(&mut self, intermediate: Option<char>) {
+        match intermediate {
+            None => {
+                self.tx
+                    .try_send(Command::IdentifyTerminal(IdentifyTerminalMode::Primary))
+                    .unwrap();
+            }
+            Some('>') => {
+                self.tx
+                    .try_send(Command::IdentifyTerminal(IdentifyTerminalMode::Secondary))
+                    .unwrap();
+            }
+            _ => {
+                println!("Unknown intermediate: {:?}", intermediate);
+            }
+        }
         println!("Identify terminal");
     }
 
-    fn device_status(&mut self, _: usize) {
-        self.tx.try_send(Command::ReportCursorPosition).unwrap();
-        // println!("Device status request");
+    fn device_status(&mut self, arg: usize) {
+        match arg {
+            5 => {
+                self.tx.try_send(Command::ReportCondition(true)).unwrap();
+            }
+            6 => {
+                self.tx.try_send(Command::ReportCursorPosition).unwrap();
+            }
+            _ => {
+                println!("Unknown device status: {}", arg);
+            }
+        }
     }
 
     fn move_forward(&mut self, col: usize) {
@@ -163,11 +187,11 @@ impl Handler for StateMachine {
     }
 
     fn save_cursor_position(&mut self) {
-        println!("Save cursor position");
+        self.tx.try_send(Command::SaveCursor).unwrap();
     }
 
     fn restore_cursor_position(&mut self) {
-        println!("Restore cursor position");
+        self.tx.try_send(Command::RestoreCursor).unwrap();
     }
 
     fn clear_line(&mut self, mode: LineClearMode) {
@@ -236,12 +260,18 @@ impl Handler for StateMachine {
     }
 
     fn set_private_mode(&mut self, mode: PrivateMode) {
-        println!("Set private mode: {:?}", mode);
         match mode {
             PrivateMode::Named(NamedPrivateMode::ShowCursor) => {
                 self.tx.try_send(Command::ShowCursor).unwrap();
             }
-            _ => {}
+            PrivateMode::Named(NamedPrivateMode::SwapScreenAndSetRestoreCursor) => {
+                self.tx
+                    .try_send(Command::SwapScreenAndSetRestoreCursor)
+                    .unwrap();
+            }
+            _ => {
+                println!("Set private mode: {:?}", mode);
+            }
         }
     }
 

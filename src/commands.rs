@@ -1,3 +1,8 @@
+pub enum IdentifyTerminalMode {
+    Primary,
+    Secondary,
+}
+
 pub enum Command {
     AlternateScreenBuffer(bool),
     Backspace,
@@ -11,6 +16,7 @@ pub enum Command {
     ClearLineBeforeCursor,
     ClearScreen,
     Exit,
+    IdentifyTerminal(IdentifyTerminalMode),
     LineFeed,
     MoveCursor(i16, i16),
     MoveCursorAbsoluteHorizontal(i16),
@@ -20,8 +26,12 @@ pub enum Command {
     NewLine,
     Print(char),
     PutTab,
+    ReportCondition(bool),
     ReportCursorPosition,
     ResetStyles,
+    RestoreCursor,
     SGR(Vec<i16>),
+    SaveCursor,
     ShowCursor,
+    SwapScreenAndSetRestoreCursor,
 }

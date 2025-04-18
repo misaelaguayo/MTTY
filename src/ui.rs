@@ -3,7 +3,11 @@ use std::sync::{atomic::AtomicBool, Arc};
 use eframe::egui::{self, Color32};
 use tokio::sync::mpsc::{Receiver, Sender};
 
-use crate::{commands::Command, config::Config, styles::Styles};
+use crate::{
+    commands::{Command, IdentifyTerminalMode},
+    config::Config,
+    styles::Styles,
+};
 
 #[cfg(test)]
 mod tests;
@@ -14,7 +18,10 @@ pub struct Ui {
     tx: Sender<Vec<u8>>,
     rx: Receiver<Command>,
     pos: (usize, usize),
+    saved_pos: (usize, usize),
     grid: Vec<Vec<char>>,
+    cols: usize,
+    rows: usize,
     styles: Styles,
 }
 
@@ -33,13 +40,16 @@ impl Ui {
             tx,
             rx,
             pos: (0, 0),
+            saved_pos: (0, 0),
             grid,
+            cols: config.cols as usize,
+            rows: config.rows as usize,
             styles: Styles::default(),
         }
     }
 
     #[cfg(debug_assertions)]
-    fn _pretty_print_grid(&self) {
+    fn pretty_print_grid(&self) {
         for row in &self.grid {
             for c in row {
                 if *c == ' ' {
@@ -56,8 +66,23 @@ impl Ui {
         self.pos = (x, y);
     }
 
+    fn double_grid(&mut self) {
+        let cols = self.grid[0].len();
+        self.grid
+            .resize_with(self.grid.len() * 2, || vec![' '; cols]);
+    }
+
     fn place_character_in_grid(&mut self, cols: u16, c: char) {
-        let (row, col) = self.pos;
+        let (mut row, mut col) = self.pos;
+
+        if col >= cols as usize - 1 {
+            self.set_pos(row + 1, 0);
+        }
+
+        (row, col) = self.pos;
+        while row >= self.grid.len() {
+            self.double_grid();
+        }
 
         match c {
             '\n' => {
@@ -70,10 +95,6 @@ impl Ui {
                 self.grid[row][col] = c;
                 self.set_pos(row, col + 1);
             }
-        }
-
-        if col >= cols as usize - 1 {
-            self.set_pos(row + 1, 0);
         }
     }
 
@@ -137,6 +158,14 @@ impl Ui {
         }
     }
 
+    fn save_cursor(&mut self) {
+        self.saved_pos = self.pos;
+    }
+
+    fn restore_cursor(&mut self) {
+        self.pos = self.saved_pos;
+    }
+
     fn handle_command(&mut self, command: Command) {
         let cols = self.grid[0].len() as u16;
         match command {
@@ -147,10 +176,13 @@ impl Ui {
                 self.place_character_in_grid(cols, c);
             }
             Command::NewLine => {
-                self.set_pos(self.pos.0 + 1, 0);
+                self.place_character_in_grid(cols, '\n');
             }
             Command::CarriageReturn => {
                 self.place_character_in_grid(cols, '\r');
+            }
+            Command::LineFeed => {
+                self.set_pos(self.pos.0 + 1, 0);
             }
             Command::ClearScreen => {
                 self.clear_screen();
@@ -238,8 +270,12 @@ impl Ui {
                     )
                     .unwrap();
             }
-            Command::LineFeed => {
-                self.set_pos(self.pos.0 + 1, 0);
+            Command::ReportCondition(healthy) => {
+                if healthy {
+                    self.tx.try_send(b"\x1b[0n".to_vec()).unwrap();
+                } else {
+                    self.tx.try_send(b"\x1b[3n".to_vec()).unwrap();
+                }
             }
             Command::ShowCursor => {
                 self.show_cursor();
@@ -253,6 +289,26 @@ impl Ui {
                     }
                 }
             }
+            Command::SaveCursor => {
+                self.save_cursor();
+            }
+            Command::RestoreCursor => {
+                self.restore_cursor();
+            }
+            Command::SwapScreenAndSetRestoreCursor => {
+                self.saved_pos = self.pos;
+                self.grid = vec![vec![' '; self.grid[0].len()]; self.grid.len()];
+            }
+            Command::IdentifyTerminal(mode) => match mode {
+                IdentifyTerminalMode::Primary => {
+                    self.tx.try_send(b"\x1b[?6c".to_vec()).unwrap();
+                }
+                IdentifyTerminalMode::Secondary => {
+                    let version = "0.0.1";
+                    let text = format!("\x1b[>0;{version};1c");
+                    self.tx.try_send(text.as_bytes().to_vec()).unwrap();
+                }
+            },
             _ => {}
         }
     }
@@ -271,6 +327,7 @@ impl Ui {
                         self.tx.try_send(vec![8]).unwrap();
                     }
                     egui::Key::Escape => {
+                        self.pretty_print_grid();
                         self.tx.try_send(vec![27]).unwrap();
                     }
                     egui::Key::ArrowUp => {
@@ -347,7 +404,10 @@ impl eframe::App for Ui {
                 .min_row_height(0.0001)
                 .spacing([0.0, 0.0])
                 .show(ui, |ui| {
-                    for (i, row) in self.grid.iter().enumerate() {
+                    // Show only the last `rows` rows of the grid
+                    let start_row = self.grid.len() - self.rows;
+
+                    for (i, row) in self.grid[start_row..].iter().enumerate() {
                         for (j, c) in row.iter().enumerate() {
                             if i == self.pos.0 && j == self.pos.1 {
                                 ui.monospace(
