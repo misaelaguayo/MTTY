@@ -11,6 +11,7 @@ pub enum Command {
     ClearLineBeforeCursor,
     ClearScreen,
     Exit,
+    LineFeed,
     MoveCursor(i16, i16),
     MoveCursorAbsoluteHorizontal(i16),
     MoveCursorHorizontal(i16),

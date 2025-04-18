@@ -231,6 +231,9 @@ impl Ui {
                     )
                     .unwrap();
             }
+            Command::LineFeed => {
+                self.set_pos(self.pos.0 + 1, 0);
+            }
             _ => {}
         }
     }
