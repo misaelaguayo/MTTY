@@ -152,10 +152,6 @@ impl Ui {
     }
 
     fn show_cursor(&mut self) {
-        let (row, col) = self.pos;
-        if row < self.grid.len() && col < self.grid[row].len() {
-            self.grid[row][col] = '|';
-        }
     }
 
     fn save_cursor(&mut self) {
