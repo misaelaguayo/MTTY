@@ -347,16 +347,6 @@ impl eframe::App for Ui {
                 .min_row_height(0.0001)
                 .spacing([0.0, 0.0])
                 .show(ui, |ui| {
-                    // self.grid.iter().for_each(|row| {
-                    //     row.iter().for_each(|&c| {
-                    //         ui.monospace(
-                    //             egui::RichText::new(c.to_string())
-                    //                 .color(self.styles.text_color.to_color32()),
-                    //         );
-                    //     });
-                    //     ui.end_row();
-                    // });
-
                     for (i, row) in self.grid.iter().enumerate() {
                         for (j, c) in row.iter().enumerate() {
                             if i == self.pos.0 && j == self.pos.1 {
