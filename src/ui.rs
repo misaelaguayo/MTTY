@@ -4,7 +4,7 @@ use eframe::egui::{self, Color32};
 use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::{
-    commands::{Command, IdentifyTerminalMode},
+    commands::{Command, IdentifyTerminalMode, SgrAttribute},
     config::Config,
     styles::Styles,
 };
@@ -121,38 +121,58 @@ impl Ui {
         }
     }
 
-    fn handle_sgr_command(&mut self, command: i16) {
-        match command {
-            0 => {
-                // reset all styles
+    fn handle_sgr_attribute(&mut self, attribute: SgrAttribute) {
+        match attribute {
+            SgrAttribute::Reset => {
                 self.styles = Styles::default();
             }
-            1 => {
-                // bold
+            SgrAttribute::Bold => {
                 self.styles.font_size = 20;
             }
-            2 => {
-                // faint
+            SgrAttribute::Dim => {
                 self.styles.font_size = 14;
             }
-            3 => {
-                // italic
+            SgrAttribute::Italic => {
                 self.styles.italic = true;
             }
-            4 => {
-                // underline
+            SgrAttribute::Underline => {
                 self.styles.underline = true;
             }
-            30..37 => {
-                // foreground color
-                self.styles.set_foreground_color_from_int(command);
+            SgrAttribute::DoubleUnderline => {}
+            SgrAttribute::Undercurl => {}
+            SgrAttribute::DottedUnderline => {}
+            SgrAttribute::DashedUnderline => {}
+            SgrAttribute::BlinkSlow => {}
+            SgrAttribute::BlinkFast => {}
+            SgrAttribute::Reverse => {}
+            SgrAttribute::Hidden => {}
+            SgrAttribute::Strike => {}
+            SgrAttribute::CancelBold => {
+                self.styles.font_size = 16;
+            }
+            SgrAttribute::CancelBoldDim => {
+                self.styles.font_size = 16;
+            }
+            SgrAttribute::CancelItalic => {
+                self.styles.italic = false;
+            }
+            SgrAttribute::CancelUnderline => {
+                self.styles.underline = false;
+            }
+            SgrAttribute::CancelBlink => {}
+            SgrAttribute::CancelReverse => {}
+            SgrAttribute::CancelHidden => {}
+            SgrAttribute::Foreground(color) => {
+                self.styles.text_color = color;
+            }
+            SgrAttribute::Background(color) => {
+                self.styles.background_color = color;
             }
             _ => {}
         }
     }
 
-    fn show_cursor(&mut self) {
-    }
+    fn show_cursor(&mut self) {}
 
     fn save_cursor(&mut self) {
         self.saved_pos = self.pos;
@@ -252,10 +272,8 @@ impl Ui {
                     self.grid[row][col + i as usize] = ' ';
                 }
             }
-            Command::SGR(commands) => {
-                commands.iter().for_each(|command| {
-                    self.handle_sgr_command(*command);
-                });
+            Command::SGR(command) => {
+                self.handle_sgr_attribute(command);
             }
             Command::ReportCursorPosition => {
                 self.tx
@@ -414,7 +432,10 @@ impl eframe::App for Ui {
                             } else {
                                 ui.monospace(
                                     egui::RichText::new(c.to_string())
-                                        .color(self.styles.text_color.to_color32()),
+                                        .color(self.styles.text_color.to_color32())
+                                        .background_color(
+                                            self.styles.background_color.to_color32(),
+                                        ),
                                 );
                             }
                         }

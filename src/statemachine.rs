@@ -6,7 +6,7 @@ use vte::ansi::{
     TabulationClearMode,
 };
 
-use crate::commands::{Command, IdentifyTerminalMode};
+use crate::commands::{Command, IdentifyTerminalMode, SgrAttribute};
 
 pub struct StateMachine {
     tx: Sender<Command>,
@@ -243,7 +243,9 @@ impl Handler for StateMachine {
         if attr == Attr::Reset {
             self.tx.try_send(Command::ResetStyles).unwrap();
         } else {
-            // self.tx.try_send(Command::SGR(vec![])).unwrap();
+            self.tx
+                .try_send(Command::SGR(SgrAttribute::from_vte_attr(attr)))
+                .unwrap();
         }
     }
 

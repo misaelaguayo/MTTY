@@ -1,4 +1,5 @@
 use eframe::egui::Color32;
+use vte::ansi::Color as VteColor;
 
 pub enum Color {
     Black,
@@ -17,6 +18,7 @@ pub enum Color {
     BrightMagenta,
     BrightCyan,
     BrightWhite,
+    Rgb(u8, u8, u8),
 }
 
 impl Color {
@@ -38,6 +40,41 @@ impl Color {
             Color::BrightMagenta => Color32::from_rgb(255, 0, 255),
             Color::BrightCyan => Color32::from_rgb(0, 255, 255),
             Color::BrightWhite => Color32::from_rgb(255, 255, 255),
+            Color::Rgb(r, g, b) => Color32::from_rgb(*r, *g, *b),
+        }
+    }
+
+    pub fn from_vte_color(color: VteColor) -> Self {
+        match color {
+            VteColor::Named(named) => match named {
+                vte::ansi::NamedColor::Black => Color::Black,
+                vte::ansi::NamedColor::Red => Color::Red,
+                vte::ansi::NamedColor::Green => Color::Green,
+                vte::ansi::NamedColor::Yellow => Color::Yellow,
+                vte::ansi::NamedColor::Blue => Color::Blue,
+                vte::ansi::NamedColor::Magenta => Color::Magenta,
+                vte::ansi::NamedColor::Cyan => Color::Cyan,
+                vte::ansi::NamedColor::White => Color::White,
+                vte::ansi::NamedColor::BrightBlack => Color::Gray,
+                vte::ansi::NamedColor::BrightRed => Color::BrightRed,
+                vte::ansi::NamedColor::BrightGreen => Color::BrightGreen,
+                vte::ansi::NamedColor::BrightYellow => Color::BrightYellow,
+                vte::ansi::NamedColor::BrightBlue => Color::BrightBlue,
+                vte::ansi::NamedColor::BrightMagenta => Color::BrightMagenta,
+                vte::ansi::NamedColor::BrightCyan => Color::BrightCyan,
+                vte::ansi::NamedColor::BrightWhite => Color::BrightWhite,
+                vte::ansi::NamedColor::DimBlack => Color::Gray,
+                vte::ansi::NamedColor::DimRed => Color::Red,
+                vte::ansi::NamedColor::DimGreen => Color::Green,
+                vte::ansi::NamedColor::DimYellow => Color::Yellow,
+                vte::ansi::NamedColor::DimBlue => Color::Blue,
+                vte::ansi::NamedColor::DimMagenta => Color::Magenta,
+                vte::ansi::NamedColor::DimCyan => Color::Cyan,
+                vte::ansi::NamedColor::DimWhite => Color::White,
+                _ => Color::White, // Default to white for unsupported colors
+            },
+            VteColor::Spec(rgb) => Color::Rgb(rgb.r, rgb.g, rgb.b),
+            VteColor::Indexed(_) => Color::White, // Default to white for indexed colors
         }
     }
 }
