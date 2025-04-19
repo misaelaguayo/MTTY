@@ -1,4 +1,4 @@
-use vte::ansi::Attr;
+use vte::ansi::{Attr, Rgb};
 
 use crate::styles::Color;
 
@@ -103,4 +103,5 @@ pub enum Command {
     SaveCursor,
     ShowCursor,
     SwapScreenAndSetRestoreCursor,
+    SetColor(usize, Rgb),
 }

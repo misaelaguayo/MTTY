@@ -6,7 +6,7 @@ use tokio::sync::broadcast::{Receiver, Sender};
 use crate::{
     commands::{Command, IdentifyTerminalMode, SgrAttribute},
     config::Config,
-    styles::Styles,
+    styles::{Color, Styles},
 };
 
 #[cfg(test)]
@@ -319,6 +319,9 @@ impl Ui {
                     self.tx.send(text.as_bytes().to_vec()).unwrap();
                 }
             },
+            Command::SetColor(index, color) => {
+                self.styles.color_array[index] = Color::Rgb(color.r, color.g, color.b);
+            }
             _ => {}
         }
     }
@@ -414,7 +417,6 @@ impl eframe::App for Ui {
                 .min_row_height(0.0001)
                 .spacing([0.0, 0.0])
                 .show(ui, |ui| {
-                    // Show only the last `rows` rows of the grid
                     let start_row = 0;
 
                     for (i, row) in self.grid[start_row..].iter().enumerate() {
@@ -422,15 +424,15 @@ impl eframe::App for Ui {
                             if i == self.pos.0 && j == self.pos.1 {
                                 ui.monospace(
                                     egui::RichText::new(c.to_string())
-                                        .color(self.styles.text_color.to_color32())
+                                        .color(self.styles.to_color32(self.styles.text_color))
                                         .background_color(Color32::WHITE),
                                 );
                             } else {
                                 ui.monospace(
                                     egui::RichText::new(c.to_string())
-                                        .color(self.styles.text_color.to_color32())
+                                        .color(self.styles.to_color32(self.styles.text_color))
                                         .background_color(
-                                            self.styles.background_color.to_color32(),
+                                            self.styles.to_color32(self.styles.background_color),
                                         ),
                                 );
                             }

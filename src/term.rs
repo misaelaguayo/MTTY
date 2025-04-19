@@ -58,7 +58,7 @@ pub fn write_to_fd(fd: BorrowedFd, data: &[u8]) {
 
     match write_result {
         Ok(size) => {
-            // println!("Wrote {} bytes", size);
+            println!("Wrote {} bytes", size);
         }
         Err(e) => eprintln!("Failed to write to file: {:?}", e),
     }
