@@ -6,6 +6,7 @@ use tokio::sync::broadcast::{Receiver, Sender};
 use crate::{
     commands::{Command, IdentifyTerminalMode, SgrAttribute},
     config::Config,
+    grid::Grid,
     styles::{Color, Styles},
 };
 
@@ -17,10 +18,7 @@ pub struct Ui {
     input: String,
     tx: Sender<Vec<u8>>,
     rx: Receiver<Command>,
-    pos: (usize, usize),
-    saved_pos: (usize, usize),
-    grid: Vec<Vec<char>>,
-    styles: Styles,
+    grid: Grid,
 }
 
 impl Ui {
@@ -30,109 +28,32 @@ impl Ui {
         tx: Sender<Vec<u8>>,
         rx: Receiver<Command>,
     ) -> Self {
-        let grid = vec![vec![' '; config.cols as usize]; config.rows as usize];
         println!("Grid size: {} x {}", config.rows, config.cols);
         Self {
             exit_flag,
             input: String::new(),
             tx,
             rx,
-            pos: (0, 0),
-            saved_pos: (0, 0),
-            grid,
-            styles: Styles::default(),
-        }
-    }
-
-    #[cfg(debug_assertions)]
-    fn pretty_print_grid(&self) {
-        for row in &self.grid {
-            for c in row {
-                if *c == ' ' {
-                    print!(".");
-                } else {
-                    print!("{}", c);
-                }
-            }
-            println!();
-        }
-    }
-
-    fn set_pos(&mut self, x: usize, y: usize) {
-        self.pos = (x, y);
-    }
-
-    fn add_rows(&mut self, rows: usize) {
-        let cols = self.grid[0].len();
-        self.grid
-            .resize_with(self.grid.len() + rows, || vec![' '; cols]);
-    }
-
-    fn place_character_in_grid(&mut self, cols: u16, c: char) {
-        let (mut row, mut col) = self.pos;
-
-        if col >= cols as usize - 1 {
-            self.set_pos(row + 1, 0);
-        }
-
-        (row, col) = self.pos;
-        if row >= self.grid.len() {
-            self.add_rows(row - self.grid.len() + 1);
-        }
-
-        match c {
-            '\n' => {
-                self.set_pos(row + 1, 0);
-            }
-            '\r' => {
-                self.set_pos(row, 0);
-            }
-            _ => {
-                self.grid[row][col] = c;
-                self.set_pos(row, col + 1);
-            }
-        }
-    }
-
-    fn clear_screen(&mut self) {
-        self.grid = vec![vec![' '; self.grid[0].len()]; self.grid.len()];
-    }
-
-    fn delete_character(&mut self) {
-        let (mut row, mut col) = self.pos;
-        let cols = self.grid[0].len() as usize;
-
-        if col > 0 {
-            (row, col) = self.pos;
-            self.grid[row][col] = ' ';
-
-            self.set_pos(row, col - 1);
-        } else if row > 0 {
-            (row, col) = self.pos;
-            self.grid[row][col] = ' ';
-
-            self.set_pos(row - 1, cols - 1);
-        } else {
-            self.grid[row][col] = ' ';
+            grid: Grid::new(config),
         }
     }
 
     fn handle_sgr_attribute(&mut self, attribute: SgrAttribute) {
         match attribute {
             SgrAttribute::Reset => {
-                self.styles = Styles::default();
+                self.grid.styles = Styles::default();
             }
             SgrAttribute::Bold => {
-                self.styles.font_size = 20;
+                self.grid.styles.font_size = 20;
             }
             SgrAttribute::Dim => {
-                self.styles.font_size = 14;
+                self.grid.styles.font_size = 14;
             }
             SgrAttribute::Italic => {
-                self.styles.italic = true;
+                self.grid.styles.italic = true;
             }
             SgrAttribute::Underline => {
-                self.styles.underline = true;
+                self.grid.styles.underline = true;
             }
             SgrAttribute::DoubleUnderline => {}
             SgrAttribute::Undercurl => {}
@@ -144,128 +65,135 @@ impl Ui {
             SgrAttribute::Hidden => {}
             SgrAttribute::Strike => {}
             SgrAttribute::CancelBold => {
-                self.styles.font_size = 16;
+                self.grid.styles.font_size = 16;
             }
             SgrAttribute::CancelBoldDim => {
-                self.styles.font_size = 16;
+                self.grid.styles.font_size = 16;
             }
             SgrAttribute::CancelItalic => {
-                self.styles.italic = false;
+                self.grid.styles.italic = false;
             }
             SgrAttribute::CancelUnderline => {
-                self.styles.underline = false;
+                self.grid.styles.underline = false;
             }
             SgrAttribute::CancelBlink => {}
             SgrAttribute::CancelReverse => {}
             SgrAttribute::CancelHidden => {}
-            SgrAttribute::Foreground(color) => {
-                self.styles.text_color = color;
-            }
-            SgrAttribute::Background(color) => {
-                self.styles.background_color = color;
-            }
+            SgrAttribute::Foreground(color) => match color {
+                Color::Foreground => {
+                    self.grid.styles.active_text_color = self.grid.styles.default_text_color
+                }
+                Color::Background => {
+                    self.grid.styles.active_text_color = self.grid.styles.default_background_color
+                }
+                _ => {
+                    self.grid.styles.active_text_color = color;
+                }
+            },
+            SgrAttribute::Background(color) => match color {
+                Color::Foreground => {
+                    self.grid.styles.active_background_color = self.grid.styles.default_text_color
+                }
+                Color::Background => {
+                    self.grid.styles.active_background_color =
+                        self.grid.styles.default_background_color
+                }
+                _ => {
+                    self.grid.styles.active_background_color = color;
+                }
+            },
             _ => {}
         }
     }
 
-    fn show_cursor(&mut self) {}
-
-    fn save_cursor(&mut self) {
-        self.saved_pos = self.pos;
-    }
-
-    fn restore_cursor(&mut self) {
-        self.pos = self.saved_pos;
-    }
-
     fn handle_command(&mut self, command: Command) {
-        let cols = self.grid[0].len() as u16;
+        let cols = self.grid.width;
         match command {
             Command::Backspace => {
-                self.delete_character();
+                self.grid.delete_character();
             }
             Command::Print(c) => {
-                self.place_character_in_grid(cols, c);
+                self.grid.place_character_in_grid(cols, c);
             }
             Command::NewLine => {
-                self.place_character_in_grid(cols, '\n');
+                self.grid.place_character_in_grid(cols, '\n');
             }
             Command::CarriageReturn => {
-                self.place_character_in_grid(cols, '\r');
+                self.grid.place_character_in_grid(cols, '\r');
             }
             Command::LineFeed => {
-                self.set_pos(self.pos.0 + 1, 0);
+                self.grid.set_pos(self.grid.cursor_pos.0 + 1, 0);
             }
             Command::ClearScreen => {
-                self.clear_screen();
+                self.grid.clear_screen();
             }
             Command::MoveCursor(x, y) => {
-                self.set_pos(x as usize, y as usize);
+                self.grid.set_pos(x as usize, y as usize);
             }
             Command::MoveCursorAbsoluteHorizontal(y) => {
-                self.set_pos(self.pos.0, y as usize);
+                self.grid.set_pos(self.grid.cursor_pos.0, y as usize);
             }
             Command::MoveCursorHorizontal(y) => {
-                let new_y = self.pos.1 as i16 + y;
-                self.set_pos(self.pos.0, new_y as usize);
+                let new_y = self.grid.cursor_pos.1 as i16 + y;
+                self.grid.set_pos(self.grid.cursor_pos.0, new_y as usize);
             }
             Command::MoveCursorVertical(x) => {
-                let new_x = self.pos.1 as i16 + x;
-                self.set_pos(new_x as usize, self.pos.0);
+                let new_x = self.grid.cursor_pos.1 as i16 + x;
+                self.grid.set_pos(new_x as usize, self.grid.cursor_pos.0);
             }
             Command::ClearLineAfterCursor => {
-                let (row, col) = self.pos;
-                for i in col..self.grid[row].len() {
-                    self.grid[row][i] = ' ';
+                let (row, col) = self.grid.cursor_pos;
+                for i in col..self.grid.cells[row].len() {
+                    self.grid.cells[row][i].char = ' ';
                 }
             }
             Command::ClearLineBeforeCursor => {
-                let (row, col) = self.pos;
+                let (row, col) = self.grid.cursor_pos;
                 for i in 0..col {
-                    self.grid[row][i] = ' ';
+                    self.grid.cells[row][i].char = ' ';
                 }
             }
             Command::ClearLine => {
-                let (row, _) = self.pos;
-                for i in 0..self.grid[row].len() {
-                    self.grid[row][i] = ' ';
+                let (row, _) = self.grid.cursor_pos;
+                for i in 0..self.grid.cells[row].len() {
+                    self.grid.cells[row][i].char = ' ';
                 }
             }
             Command::ClearBelow => {
                 // first clear after cursor
-                let (row, col) = self.pos;
-                for i in col..self.grid[row].len() {
-                    self.grid[row][i] = ' ';
+                let (row, col) = self.grid.cursor_pos;
+                for i in col..self.grid.cells[row].len() {
+                    self.grid.cells[row][i].char = ' ';
                 }
 
                 // then clear below
-                for i in row + 1..self.grid.len() {
-                    for j in 0..self.grid[i].len() {
-                        self.grid[i][j] = ' ';
+                for i in row + 1..self.grid.cells.len() {
+                    for j in 0..self.grid.cells[i].len() {
+                        self.grid.cells[i][j].char = ' ';
                     }
                 }
             }
             Command::ClearAbove => {
                 // first clear before cursor
-                let (row, col) = self.pos;
+                let (row, col) = self.grid.cursor_pos;
                 for i in 0..col {
-                    self.grid[row][i] = ' ';
+                    self.grid.cells[row][i].char = ' ';
                 }
 
                 // then clear above
                 for i in 0..row {
-                    for j in 0..self.grid[i].len() {
-                        self.grid[i][j] = ' ';
+                    for j in 0..self.grid.cells[i].len() {
+                        self.grid.cells[i][j].char = ' ';
                     }
                 }
             }
             Command::ClearCount(count) => {
-                let (row, col) = self.pos;
+                let (row, col) = self.grid.cursor_pos;
                 for i in 0..count {
-                    if col + i as usize >= self.grid[row].len() {
+                    if col + i as usize >= self.grid.cells[row].len() {
                         break;
                     }
-                    self.grid[row][col + i as usize] = ' ';
+                    self.grid.cells[row][col + i as usize].char = ' ';
                 }
             }
             Command::SGR(command) => {
@@ -274,9 +202,12 @@ impl Ui {
             Command::ReportCursorPosition => {
                 self.tx
                     .send(
-                        format!("\x1b[{};{}R", self.pos.0, self.pos.1)
-                            .as_bytes()
-                            .to_vec(),
+                        format!(
+                            "\x1b[{};{}R",
+                            self.grid.cursor_pos.0, self.grid.cursor_pos.1
+                        )
+                        .as_bytes()
+                        .to_vec(),
                     )
                     .unwrap();
             }
@@ -288,26 +219,26 @@ impl Ui {
                 }
             }
             Command::ShowCursor => {
-                self.show_cursor();
+                self.grid.show_cursor();
             }
             Command::PutTab => {
-                let (row, col) = self.pos;
-                if col < self.grid[row].len() - 5 {
+                let (row, col) = self.grid.cursor_pos;
+                if col < self.grid.cells[row].len() - 5 {
                     for i in col..col + 4 {
-                        self.grid[row][i] = ' ';
-                        self.set_pos(row, i + 1);
+                        self.grid.cells[row][i].char = ' ';
+                        self.grid.set_pos(row, i + 1);
                     }
                 }
             }
             Command::SaveCursor => {
-                self.save_cursor();
+                self.grid.save_cursor();
             }
             Command::RestoreCursor => {
-                self.restore_cursor();
+                self.grid.restore_cursor();
             }
             Command::SwapScreenAndSetRestoreCursor => {
-                self.saved_pos = self.pos;
-                self.grid = vec![vec![' '; self.grid[0].len()]; self.grid.len()];
+                self.grid.saved_cursor_pos = self.grid.cursor_pos;
+                self.grid.clear_screen();
             }
             Command::IdentifyTerminal(mode) => match mode {
                 IdentifyTerminalMode::Primary => {
@@ -320,7 +251,7 @@ impl Ui {
                 }
             },
             Command::SetColor(index, color) => {
-                self.styles.color_array[index] = Color::Rgb(color.r, color.g, color.b);
+                self.grid.styles.color_array[index] = Color::Rgb(color.r, color.g, color.b);
             }
             _ => {}
         }
@@ -340,7 +271,7 @@ impl Ui {
                         self.tx.send(vec![8]).unwrap();
                     }
                     egui::Key::Escape => {
-                        self.pretty_print_grid();
+                        // self.pretty_print_grid();
                         self.tx.send(vec![27]).unwrap();
                     }
                     egui::Key::ArrowUp => {
@@ -412,28 +343,26 @@ impl eframe::App for Ui {
 
             egui::Grid::new("grid")
                 .striped(false)
-                .min_col_width(0.0001)
-                .max_col_width(0.0001)
-                .min_row_height(0.0001)
+                .min_col_width(0.0)
+                .max_col_width(10.0)
+                .min_row_height(0.0)
                 .spacing([0.0, 0.0])
                 .show(ui, |ui| {
                     let start_row = 0;
 
-                    for (i, row) in self.grid[start_row..].iter().enumerate() {
-                        for (j, c) in row.iter().enumerate() {
-                            if i == self.pos.0 && j == self.pos.1 {
+                    for (i, row) in self.grid.cells[start_row..].iter().enumerate() {
+                        for (j, cell) in row.iter().enumerate() {
+                            if i == self.grid.cursor_pos.0 && j == self.grid.cursor_pos.1 {
                                 ui.monospace(
-                                    egui::RichText::new(c.to_string())
-                                        .color(self.styles.to_color32(self.styles.text_color))
+                                    egui::RichText::new(cell.to_string())
+                                        .color(self.grid.styles.to_color32(cell.fg))
                                         .background_color(Color32::WHITE),
                                 );
                             } else {
                                 ui.monospace(
-                                    egui::RichText::new(c.to_string())
-                                        .color(self.styles.to_color32(self.styles.text_color))
-                                        .background_color(
-                                            self.styles.to_color32(self.styles.background_color),
-                                        ),
+                                    egui::RichText::new(cell.to_string())
+                                        .color(self.grid.styles.to_color32(cell.fg))
+                                        .background_color(self.grid.styles.to_color32(cell.bg)),
                                 );
                             }
                         }

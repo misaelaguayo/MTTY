@@ -38,6 +38,10 @@ pub enum SgrAttribute {
 }
 
 impl SgrAttribute {
+    pub fn default() -> Self {
+        SgrAttribute::Reset
+    }
+
     pub fn from_vte_attr(attr: Attr) -> Self {
         match attr {
             Attr::Reset => SgrAttribute::Reset,

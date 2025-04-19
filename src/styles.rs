@@ -64,7 +64,7 @@ impl Color {
 
     pub fn default_array() -> [Color; 256] {
         [
-            Color::Gray,
+            Color::Black,
             Color::Red,
             Color::Green,
             Color::Yellow,
@@ -72,7 +72,7 @@ impl Color {
             Color::Magenta,
             Color::Cyan,
             Color::White,
-            Color::Black,
+            Color::Gray,
             Color::BrightRed,
             Color::BrightGreen,
             Color::BrightYellow,
@@ -325,8 +325,10 @@ impl Color {
 }
 
 pub struct Styles {
-    pub background_color: Color,
-    pub text_color: Color,
+    pub active_background_color: Color,
+    pub default_background_color: Color,
+    pub active_text_color: Color,
+    pub default_text_color: Color,
     pub font_size: u32,
     pub italic: bool,
     pub underline: bool,
@@ -353,52 +355,21 @@ impl Styles {
             Color::BrightCyan => Color32::from_rgb(0, 255, 255),
             Color::BrightWhite => Color32::from_rgb(255, 255, 255),
             Color::Rgb(r, g, b) => Color32::from_rgb(r, g, b),
-            Color::Foreground => self.to_color32(self.text_color),
-            Color::Background => self.to_color32(self.background_color),
+            Color::Foreground => self.to_color32(self.active_text_color),
+            Color::Background => self.to_color32(self.active_background_color),
             Color::ColorIndex(i) => self.to_color32(self.color_array[i as usize]),
         }
     }
     pub fn default() -> Self {
         Self {
-            background_color: Color::Black,
-            text_color: Color::White,
+            active_background_color: Color::Black,
+            default_background_color: Color::Black,
+            active_text_color: Color::White,
+            default_text_color: Color::White,
             font_size: 16,
             italic: false,
             underline: false,
             color_array: Color::default_array(),
         }
     }
-
-    pub fn set_foreground_color_from_int(&mut self, color: i16) {
-        match color {
-            30 => self.text_color = Color::Black,
-            31 => self.text_color = Color::Red,
-            32 => self.text_color = Color::Green,
-            33 => self.text_color = Color::Yellow,
-            34 => self.text_color = Color::Blue,
-            35 => self.text_color = Color::Magenta,
-            36 => self.text_color = Color::Cyan,
-            37 => self.text_color = Color::White,
-            90 => self.text_color = Color::Gray,
-            91 => self.text_color = Color::BrightRed,
-            92 => self.text_color = Color::BrightGreen,
-            93 => self.text_color = Color::BrightYellow,
-            94 => self.text_color = Color::BrightBlue,
-            95 => self.text_color = Color::BrightMagenta,
-            96 => self.text_color = Color::BrightCyan,
-            97 => self.text_color = Color::BrightWhite,
-            _ => {
-                // Not supported
-            }
-        }
-    }
-
-    // TODO: Implement a method to apply styles to the UI
-    // pub fn from_config(config: &Config) -> Self {
-    //     Self::new(
-    //         config.background_color.clone(),
-    //         config.text_color.clone(),
-    //         config.font_size,
-    //     )
-    // }
 }

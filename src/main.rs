@@ -11,6 +11,7 @@ use tokio::sync::broadcast;
 pub mod commands;
 pub mod config;
 pub mod fonts;
+pub mod grid;
 pub mod statemachine;
 pub mod styles;
 pub mod term;
