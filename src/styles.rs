@@ -1,6 +1,7 @@
 use eframe::egui::Color32;
 use vte::ansi::Color as VteColor;
 
+#[derive(Debug, Clone, Copy)]
 pub enum Color {
     Black,
     Red,

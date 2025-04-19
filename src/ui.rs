@@ -1,7 +1,7 @@
 use std::sync::{atomic::AtomicBool, Arc};
 
 use eframe::egui::{self, Color32};
-use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::sync::broadcast::{Receiver, Sender};
 
 use crate::{
     commands::{Command, IdentifyTerminalMode, SgrAttribute},
@@ -20,8 +20,6 @@ pub struct Ui {
     pos: (usize, usize),
     saved_pos: (usize, usize),
     grid: Vec<Vec<char>>,
-    cols: usize,
-    rows: usize,
     styles: Styles,
 }
 
@@ -42,8 +40,6 @@ impl Ui {
             pos: (0, 0),
             saved_pos: (0, 0),
             grid,
-            cols: config.cols as usize,
-            rows: config.rows as usize,
             styles: Styles::default(),
         }
     }
@@ -277,7 +273,7 @@ impl Ui {
             }
             Command::ReportCursorPosition => {
                 self.tx
-                    .try_send(
+                    .send(
                         format!("\x1b[{};{}R", self.pos.0, self.pos.1)
                             .as_bytes()
                             .to_vec(),
@@ -286,9 +282,9 @@ impl Ui {
             }
             Command::ReportCondition(healthy) => {
                 if healthy {
-                    self.tx.try_send(b"\x1b[0n".to_vec()).unwrap();
+                    self.tx.send(b"\x1b[0n".to_vec()).unwrap();
                 } else {
-                    self.tx.try_send(b"\x1b[3n".to_vec()).unwrap();
+                    self.tx.send(b"\x1b[3n".to_vec()).unwrap();
                 }
             }
             Command::ShowCursor => {
@@ -315,12 +311,12 @@ impl Ui {
             }
             Command::IdentifyTerminal(mode) => match mode {
                 IdentifyTerminalMode::Primary => {
-                    self.tx.try_send(b"\x1b[?6c".to_vec()).unwrap();
+                    self.tx.send(b"\x1b[?6c".to_vec()).unwrap();
                 }
                 IdentifyTerminalMode::Secondary => {
                     let version = "0.0.1";
                     let text = format!("\x1b[>0;{version};1c");
-                    self.tx.try_send(text.as_bytes().to_vec()).unwrap();
+                    self.tx.send(text.as_bytes().to_vec()).unwrap();
                 }
             },
             _ => {}
@@ -338,20 +334,20 @@ impl Ui {
             } => {
                 match key {
                     egui::Key::Backspace => {
-                        self.tx.try_send(vec![8]).unwrap();
+                        self.tx.send(vec![8]).unwrap();
                     }
                     egui::Key::Escape => {
                         self.pretty_print_grid();
-                        self.tx.try_send(vec![27]).unwrap();
+                        self.tx.send(vec![27]).unwrap();
                     }
                     egui::Key::ArrowUp => {
-                        self.tx.try_send(vec![27, 91, 65]).unwrap();
+                        self.tx.send(vec![27, 91, 65]).unwrap();
                     }
                     egui::Key::Enter => {
-                        self.tx.try_send(vec![13]).unwrap();
+                        self.tx.send(vec![13]).unwrap();
                     }
                     egui::Key::Tab => {
-                        self.tx.try_send(vec![9]).unwrap();
+                        self.tx.send(vec![9]).unwrap();
                     }
                     _ => {}
                 }
@@ -359,19 +355,19 @@ impl Ui {
                 match modifiers {
                     egui::Modifiers { ctrl: true, .. } => match key.name() {
                         "C" => {
-                            self.tx.try_send(vec![3]).unwrap();
+                            self.tx.send(vec![3]).unwrap();
                         }
                         "D" => {
-                            self.tx.try_send(vec![4]).unwrap();
+                            self.tx.send(vec![4]).unwrap();
                         }
                         "L" => {
-                            self.tx.try_send(vec![12]).unwrap();
+                            self.tx.send(vec![12]).unwrap();
                         }
                         "U" => {
-                            self.tx.try_send(vec![21]).unwrap();
+                            self.tx.send(vec![21]).unwrap();
                         }
                         "W" => {
-                            self.tx.try_send(vec![23]).unwrap();
+                            self.tx.send(vec![23]).unwrap();
                         }
                         _ => {}
                     },
@@ -393,7 +389,7 @@ impl eframe::App for Ui {
         }
 
         if !self.input.is_empty() {
-            let _ = self.tx.try_send(self.input.as_bytes().to_vec());
+            let _ = self.tx.send(self.input.as_bytes().to_vec());
 
             self.input.clear();
         }

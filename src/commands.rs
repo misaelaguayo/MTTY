@@ -2,11 +2,13 @@ use vte::ansi::Attr;
 
 use crate::styles::Color;
 
+#[derive(Debug, Clone)]
 pub enum IdentifyTerminalMode {
     Primary,
     Secondary,
 }
 
+#[derive(Debug, Clone)]
 pub enum SgrAttribute {
     Reset,
     Bold,
@@ -69,6 +71,7 @@ impl SgrAttribute {
     }
 }
 
+#[derive(Debug, Clone)]
 pub enum Command {
     AlternateScreenBuffer(bool),
     Backspace,

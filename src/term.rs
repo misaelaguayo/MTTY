@@ -14,13 +14,13 @@ use nix::unistd::read;
 use nix::unistd::write;
 use rustix::termios::{self, OptionalActions, Termios};
 use rustix_openpty::openpty;
-use tokio::sync::mpsc::{self, Receiver};
+use tokio::sync::broadcast::{self, Receiver};
 
 use crate::commands::Command as TermCommand;
 use crate::config::Config;
 use crate::statemachine;
 
-use vte::ansi::{self, Processor};
+use vte::ansi::Processor;
 
 // Steps to create a terminal
 // Call openpty to get a master and slave fd
@@ -58,7 +58,7 @@ pub fn write_to_fd(fd: BorrowedFd, data: &[u8]) {
 
     match write_result {
         Ok(size) => {
-            println!("Wrote {} bytes", size);
+            // println!("Wrote {} bytes", size);
         }
         Err(e) => eprintln!("Failed to write to file: {:?}", e),
     }
@@ -202,7 +202,7 @@ fn enable_raw_mode(termios: &mut Termios) {
 pub fn spawn_read_thread(
     fd: i32,
     read_exit_flag: Arc<AtomicBool>,
-    output_tx: mpsc::Sender<TermCommand>,
+    output_tx: broadcast::Sender<TermCommand>,
 ) {
     tokio::spawn(async move {
         let mut processor: Processor = Processor::new();
@@ -227,7 +227,7 @@ pub fn spawn_write_thread(
 ) {
     tokio::spawn(async move {
         loop {
-            if let Some(data) = input_rx.recv().await {
+            if let Some(data) = input_rx.recv().await.ok() {
                 write_to_fd(write_fd.as_fd(), &data);
             }
 
