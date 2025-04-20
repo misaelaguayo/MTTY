@@ -2,10 +2,8 @@
 
 Simple terminal written in rust
 
-<img width="641" alt="Screenshot 2025-04-18 at 11 24 25 AM" src="https://github.com/user-attachments/assets/144fd779-024b-494d-8a2b-6ce307870a46" />
+<img width="641" alt="Screenshot 2025-04-20 at 6 44 03 PM" src="https://github.com/user-attachments/assets/dc1edc01-d569-4b1b-b56e-889eea88f54c" />
 
 
 - [ ] Add more OS support (only mac for now)
-- [ ] Add color support
 - [ ] Add scrolling
-- [ ] Improve redrawing
