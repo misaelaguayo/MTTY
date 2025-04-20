@@ -62,10 +62,10 @@ impl Ui {
         self.pos = (x, y);
     }
 
-    fn double_grid(&mut self) {
+    fn add_rows(&mut self, rows: usize) {
         let cols = self.grid[0].len();
         self.grid
-            .resize_with(self.grid.len() * 2, || vec![' '; cols]);
+            .resize_with(self.grid.len() + rows, || vec![' '; cols]);
     }
 
     fn place_character_in_grid(&mut self, cols: u16, c: char) {
@@ -76,8 +76,8 @@ impl Ui {
         }
 
         (row, col) = self.pos;
-        while row >= self.grid.len() {
-            self.double_grid();
+        if row >= self.grid.len() {
+            self.add_rows(row - self.grid.len() + 1);
         }
 
         match c {
