@@ -271,8 +271,17 @@ impl Handler for StateMachine {
         }
     }
 
-    fn unset_private_mode(&mut self, _mode: PrivateMode) {
-        println!("Unset private mode");
+    fn unset_private_mode(&mut self, mode: PrivateMode) {
+        match mode {
+            PrivateMode::Named(NamedPrivateMode::SwapScreenAndSetRestoreCursor) => {
+                self.tx
+                    .send(Command::SwapScreenAndSetRestoreCursor)
+                    .unwrap();
+            }
+            _ => {
+                println!("Unset private mode: {:?}", mode);
+            }
+        }
     }
 
     fn report_private_mode(&mut self, _mode: PrivateMode) {
@@ -307,8 +316,8 @@ impl Handler for StateMachine {
         println!("Dynamic color sequence");
     }
 
-    fn reset_color(&mut self, _: usize) {
-        println!("Reset color");
+    fn reset_color(&mut self, i: usize) {
+        self.tx.send(Command::ResetColor(i)).unwrap();
     }
 
     fn clipboard_store(&mut self, _: u8, _: &[u8]) {

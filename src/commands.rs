@@ -108,4 +108,5 @@ pub enum Command {
     ShowCursor,
     SwapScreenAndSetRestoreCursor,
     SetColor(usize, Rgb),
+    ResetColor(usize),
 }

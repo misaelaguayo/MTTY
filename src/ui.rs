@@ -143,33 +143,33 @@ impl Ui {
             }
             Command::ClearLineAfterCursor => {
                 let (row, col) = self.grid.cursor_pos;
-                for i in col..self.grid.cells[row].len() {
-                    self.grid.cells[row][i].char = ' ';
+                for i in col..self.grid.width as usize {
+                    self.grid.active_grid()[row][i].char = ' ';
                 }
             }
             Command::ClearLineBeforeCursor => {
                 let (row, col) = self.grid.cursor_pos;
                 for i in 0..col {
-                    self.grid.cells[row][i].char = ' ';
+                    self.grid.active_grid()[row][i].char = ' ';
                 }
             }
             Command::ClearLine => {
                 let (row, _) = self.grid.cursor_pos;
-                for i in 0..self.grid.cells[row].len() {
-                    self.grid.cells[row][i].char = ' ';
+                for i in 0..self.grid.width as usize {
+                    self.grid.active_grid()[row][i].char = ' ';
                 }
             }
             Command::ClearBelow => {
                 // first clear after cursor
                 let (row, col) = self.grid.cursor_pos;
-                for i in col..self.grid.cells[row].len() {
-                    self.grid.cells[row][i].char = ' ';
+                for i in col..self.grid.width as usize {
+                    self.grid.active_grid()[row][i].char = ' ';
                 }
 
                 // then clear below
-                for i in row + 1..self.grid.cells.len() {
-                    for j in 0..self.grid.cells[i].len() {
-                        self.grid.cells[i][j].char = ' ';
+                for i in row + 1..self.grid.height as usize {
+                    for j in 0..self.grid.width as usize {
+                        self.grid.active_grid()[i][j].char = ' ';
                     }
                 }
             }
@@ -177,23 +177,23 @@ impl Ui {
                 // first clear before cursor
                 let (row, col) = self.grid.cursor_pos;
                 for i in 0..col {
-                    self.grid.cells[row][i].char = ' ';
+                    self.grid.active_grid()[row][i].char = ' ';
                 }
 
                 // then clear above
                 for i in 0..row {
-                    for j in 0..self.grid.cells[i].len() {
-                        self.grid.cells[i][j].char = ' ';
+                    for j in 0..self.grid.width as usize {
+                        self.grid.active_grid()[i][j].char = ' ';
                     }
                 }
             }
             Command::ClearCount(count) => {
                 let (row, col) = self.grid.cursor_pos;
                 for i in 0..count {
-                    if col + i as usize >= self.grid.cells[row].len() {
+                    if col + i as usize >= self.grid.width as usize {
                         break;
                     }
-                    self.grid.cells[row][col + i as usize].char = ' ';
+                    self.grid.active_grid()[row][col + i as usize].char = ' ';
                 }
             }
             Command::SGR(command) => {
@@ -223,9 +223,9 @@ impl Ui {
             }
             Command::PutTab => {
                 let (row, col) = self.grid.cursor_pos;
-                if col < self.grid.cells[row].len() - 5 {
+                if col < self.grid.width as usize - 5 {
                     for i in col..col + 4 {
-                        self.grid.cells[row][i].char = ' ';
+                        self.grid.active_grid()[row][i].char = ' ';
                         self.grid.set_pos(row, i + 1);
                     }
                 }
@@ -238,7 +238,7 @@ impl Ui {
             }
             Command::SwapScreenAndSetRestoreCursor => {
                 self.grid.saved_cursor_pos = self.grid.cursor_pos;
-                self.grid.clear_screen();
+                self.grid.swap_active_grid();
             }
             Command::IdentifyTerminal(mode) => match mode {
                 IdentifyTerminalMode::Primary => {
@@ -252,6 +252,9 @@ impl Ui {
             },
             Command::SetColor(index, color) => {
                 self.grid.styles.color_array[index] = Color::Rgb(color.r, color.g, color.b);
+            }
+            Command::ResetColor(index) => {
+                self.grid.styles.color_array[index] = Color::default_array()[index];
             }
             _ => {}
         }
@@ -271,11 +274,20 @@ impl Ui {
                         self.tx.send(vec![8]).unwrap();
                     }
                     egui::Key::Escape => {
-                        // self.pretty_print_grid();
+                        self.grid.pretty_print();
                         self.tx.send(vec![27]).unwrap();
                     }
                     egui::Key::ArrowUp => {
                         self.tx.send(vec![27, 91, 65]).unwrap();
+                    }
+                    egui::Key::ArrowDown => {
+                        self.tx.send(vec![27, 91, 66]).unwrap();
+                    }
+                    egui::Key::ArrowLeft => {
+                        self.tx.send(vec![27, 91, 68]).unwrap();
+                    }
+                    egui::Key::ArrowRight => {
+                        self.tx.send(vec![27, 91, 67]).unwrap();
                     }
                     egui::Key::Enter => {
                         self.tx.send(vec![13]).unwrap();
@@ -350,21 +362,21 @@ impl eframe::App for Ui {
                 .show(ui, |ui| {
                     let start_row = 0;
 
-                    for (i, row) in self.grid.cells[start_row..].iter().enumerate() {
-                        for (j, cell) in row.iter().enumerate() {
-                            if i == self.grid.cursor_pos.0 && j == self.grid.cursor_pos.1 {
-                                ui.monospace(
-                                    egui::RichText::new(cell.to_string())
-                                        .color(self.grid.styles.to_color32(cell.fg))
-                                        .background_color(Color32::WHITE),
-                                );
+                    for i in start_row..self.grid.height as usize {
+                        for j in 0..self.grid.width as usize {
+                            let cell = self.grid.active_grid()[i][j].clone();
+                            let fg = self.grid.styles.to_color32(cell.fg);
+                            let bg = if i == self.grid.cursor_pos.0 && j == self.grid.cursor_pos.1 {
+                                Color32::WHITE
                             } else {
-                                ui.monospace(
-                                    egui::RichText::new(cell.to_string())
-                                        .color(self.grid.styles.to_color32(cell.fg))
-                                        .background_color(self.grid.styles.to_color32(cell.bg)),
-                                );
-                            }
+                                self.grid.styles.to_color32(cell.bg)
+                            };
+
+                            ui.monospace(
+                                egui::RichText::new(cell.to_string())
+                                    .color(fg)
+                                    .background_color(bg),
+                            );
                         }
                         ui.end_row();
                     }

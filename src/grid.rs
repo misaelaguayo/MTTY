@@ -29,10 +29,23 @@ impl ToString for Cell {
     }
 }
 
+impl Cell {
+    pub fn new(c: char, fg: Color, bg: Color) -> Self {
+        Self {
+            char: c,
+            fg,
+            bg,
+            attrs: vec![],
+        }
+    }
+}
+
 pub struct Grid {
+    cells: Vec<Vec<Cell>>,
+    alternate_screen: Vec<Vec<Cell>>,
+    alternate: bool,
     pub width: u16,
     pub height: u16,
-    pub cells: Vec<Vec<Cell>>,
     pub cursor_pos: (usize, usize),
     pub saved_cursor_pos: (usize, usize),
     pub styles: Styles,
@@ -43,22 +56,62 @@ impl Grid {
         let width = config.cols;
         let height = config.rows;
         let cells = vec![vec![Cell::default(); width as usize]; height as usize];
+        let alternate_screen = vec![vec![Cell::default(); width as usize]; height as usize];
 
         Self {
             width,
             height,
             cells,
+            alternate_screen,
             cursor_pos: (0, 0),
             saved_cursor_pos: (0, 0),
             styles: Styles::default(),
+            alternate: false,
+        }
+    }
+
+    pub fn active_grid(&mut self) -> &mut Vec<Vec<Cell>> {
+        if self.alternate {
+            &mut self.alternate_screen
+        } else {
+            &mut self.cells
+        }
+    }
+
+    pub fn swap_active_grid(&mut self) {
+        self.alternate = !self.alternate;
+        if !self.alternate {
+            self.alternate_screen = vec![
+                vec![
+                    Cell::new(
+                        ' ',
+                        self.styles.active_text_color,
+                        self.styles.active_background_color
+                    );
+                    self.width as usize
+                ];
+                self.height as usize
+            ];
         }
     }
 
     pub fn pretty_print(&self) {
+        println!("Grid: {}x{}", self.width, self.height);
+        println!("Cursor Position: {:?}", self.cursor_pos);
+        println!("Saved Cursor Position: {:?}", self.saved_cursor_pos);
+        println!(
+            "Active Grid: {:?}",
+            if self.alternate { "Alternate" } else { "Main" }
+        );
+        println!(
+            "Colors: Bg: {:?}, Fg: {:?}",
+            self.styles.active_background_color, self.styles.active_text_color
+        );
+
         for row in &self.cells {
             for cell in row {
                 if cell.char == ' ' {
-                    print!(" ");
+                    print!(".");
                 } else {
                     print!("{}", cell.char);
                 }
@@ -76,7 +129,14 @@ impl Grid {
     pub fn add_rows(&mut self, rows: usize) {
         let cols = self.width;
         self.cells.resize_with(self.cells.len() + rows, || {
-            vec![Cell::default(); cols as usize]
+            vec![
+                Cell::new(
+                    ' ',
+                    self.styles.active_text_color,
+                    self.styles.active_background_color
+                );
+                cols as usize
+            ]
         });
     }
 
@@ -112,7 +172,17 @@ impl Grid {
     }
 
     pub fn clear_screen(&mut self) {
-        self.cells = vec![vec![Cell::default(); self.cells[0].len()]; self.cells.len()];
+        self.cells = vec![
+            vec![
+                Cell::new(
+                    ' ',
+                    self.styles.active_text_color,
+                    self.styles.active_background_color
+                );
+                self.cells[0].len()
+            ];
+            self.cells.len()
+        ];
     }
 
     pub fn delete_character(&mut self) {
@@ -121,16 +191,28 @@ impl Grid {
 
         if col > 0 {
             (row, col) = self.cursor_pos;
-            self.cells[row][col] = Cell::default();
+            self.cells[row][col] = Cell::new(
+                ' ',
+                self.styles.active_text_color,
+                self.styles.active_background_color,
+            );
 
             self.set_pos(row, col - 1);
         } else if row > 0 {
             (row, col) = self.cursor_pos;
-            self.cells[row][col] = Cell::default();
+            self.cells[row][col] = Cell::new(
+                ' ',
+                self.styles.active_text_color,
+                self.styles.active_background_color,
+            );
 
             self.set_pos(row - 1, cols - 1);
         } else {
-            self.cells[row][col] = Cell::default();
+            self.cells[row][col] = Cell::new(
+                ' ',
+                self.styles.active_text_color,
+                self.styles.active_background_color,
+            );
         }
     }
 
