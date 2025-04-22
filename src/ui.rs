@@ -1,4 +1,7 @@
-use std::sync::{atomic::AtomicBool, Arc};
+use std::{
+    cmp::{max, min},
+    sync::{atomic::AtomicBool, Arc},
+};
 
 use eframe::egui::{self, Color32};
 use tokio::sync::broadcast::{Receiver, Sender};
@@ -323,6 +326,17 @@ impl Ui {
             egui::Event::Text(text) => {
                 self.input.push_str(text);
             }
+            egui::Event::MouseWheel { delta, .. } => {
+                let y = delta.y;
+                if y > 0.0 {
+                    self.grid.scroll_pos = max(0, self.grid.scroll_pos.saturating_sub(1));
+                } else {
+                    self.grid.scroll_pos = min(
+                        self.grid.active_grid().len().saturating_sub(1),
+                        self.grid.scroll_pos + 1,
+                    );
+                }
+            }
             _ => {}
         }
     }
@@ -360,9 +374,13 @@ impl eframe::App for Ui {
                 .min_row_height(0.0)
                 .spacing([0.0, 0.0])
                 .show(ui, |ui| {
-                    let start_row = 0;
+                    let start_row = self
+                        .grid
+                        .scroll_pos
+                        .saturating_sub(self.grid.height as usize - 1);
+                    let end_row = min(self.grid.scroll_pos, self.grid.height as usize);
 
-                    for i in start_row..self.grid.height as usize {
+                    for i in start_row..end_row + 1 as usize {
                         for j in 0..self.grid.width as usize {
                             let cell = self.grid.active_grid()[i][j].clone();
                             let fg = self.grid.styles.to_color32(cell.fg);

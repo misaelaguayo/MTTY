@@ -48,6 +48,7 @@ pub struct Grid {
     pub height: u16,
     pub cursor_pos: (usize, usize),
     pub saved_cursor_pos: (usize, usize),
+    pub scroll_pos: usize,
     pub styles: Styles,
 }
 
@@ -65,6 +66,7 @@ impl Grid {
             alternate_screen,
             cursor_pos: (0, 0),
             saved_cursor_pos: (0, 0),
+            scroll_pos: height as usize - 1,
             styles: Styles::default(),
             alternate: false,
         }
@@ -99,6 +101,7 @@ impl Grid {
         println!("Grid: {}x{}", self.width, self.height);
         println!("Cursor Position: {:?}", self.cursor_pos);
         println!("Saved Cursor Position: {:?}", self.saved_cursor_pos);
+        println!("Scroll Position: {:?}", self.scroll_pos);
         println!(
             "Active Grid: {:?}",
             if self.alternate { "Alternate" } else { "Main" }
@@ -121,9 +124,12 @@ impl Grid {
     }
 
     pub fn set_pos(&mut self, row: usize, col: usize) {
-        if row < self.height as usize && col < self.width as usize {
-            self.cursor_pos = (row, col);
+        if row >= self.cells.len() {
+            self.add_rows(row - self.cells.len() + 1);
+            self.scroll_pos = row;
         }
+
+        self.cursor_pos = (row, col);
     }
 
     pub fn add_rows(&mut self, rows: usize) {
@@ -148,9 +154,6 @@ impl Grid {
         }
 
         (row, col) = self.cursor_pos;
-        if row >= self.cells.len() {
-            self.add_rows(row - self.cells.len() + 1);
-        }
 
         match c {
             '\n' => {

@@ -8,11 +8,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="7bbb369a-dae9-4d62-b73c-8853510e8e96" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/commands.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/commands.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/grid.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/grid.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/statemachine.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/statemachine.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/styles.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/styles.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/ui.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -38,12 +34,12 @@
   <component name="PropertiesComponent">{
   &quot;keyToString&quot;: {
     &quot;Cargo.Run.executor&quot;: &quot;Run&quot;,
-    &quot;Cargo.run.executor&quot;: &quot;Run&quot;,
+    &quot;Cargo.run.executor&quot;: &quot;Debug&quot;,
     &quot;Cargo.zsh.executor&quot;: &quot;Debug&quot;,
     &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.rust.reset.selective.auto.import&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;de9820c1&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;ec7c3965&quot;,
     &quot;last_opened_file_path&quot;: &quot;/Users/misaelaguayo/Projects/MTTY/Cargo.toml&quot;,
     &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
     &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
@@ -117,7 +113,7 @@
       <workItem from="1743462604993" duration="8904000" />
       <workItem from="1743959476412" duration="2573000" />
       <workItem from="1744069080502" duration="895000" />
-      <workItem from="1744950833516" duration="13197000" />
+      <workItem from="1744950833516" duration="13986000" />
     </task>
     <servers />
   </component>
@@ -139,7 +135,7 @@
         </line-breakpoint>
         <line-breakpoint enabled="true" type="com.jetbrains.cidr.execution.debugger.OCBreakpointType">
           <url>file://$PROJECT_DIR$/src/grid.rs</url>
-          <line>81</line>
+          <line>83</line>
           <option name="timeStamp" value="140" />
         </line-breakpoint>
       </breakpoints>
