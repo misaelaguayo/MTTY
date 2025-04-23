@@ -259,7 +259,12 @@ impl Ui {
             Command::ResetColor(index) => {
                 self.grid.styles.color_array[index] = Color::default_array()[index];
             }
-            _ => {}
+            Command::ResetStyles => {
+                self.grid.styles = Styles::default();
+            }
+            _ => {
+                println!("Unsupported command: {:?}", command);
+            }
         }
     }
 
@@ -329,7 +334,10 @@ impl Ui {
             egui::Event::MouseWheel { delta, .. } => {
                 let y = delta.y;
                 if y > 0.0 {
-                    self.grid.scroll_pos = max(0, self.grid.scroll_pos.saturating_sub(1));
+                    self.grid.scroll_pos = max(
+                        self.grid.height as usize - 1,
+                        self.grid.scroll_pos.saturating_sub(1),
+                    );
                 } else {
                     self.grid.scroll_pos = min(
                         self.grid.active_grid().len().saturating_sub(1),
