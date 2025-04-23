@@ -109,11 +109,15 @@ impl Handler for StateMachine {
     }
 
     fn move_down_and_cr(&mut self, _row: usize) {
-        println!("Move down and carriage return");
+        self.tx
+            .send(Command::MoveCursorVerticalWithCarriageReturn(1))
+            .unwrap();
     }
 
     fn move_up_and_cr(&mut self, _row: usize) {
-        println!("Move up and carriage return");
+        self.tx
+            .send(Command::MoveCursorVerticalWithCarriageReturn(-1))
+            .unwrap();
     }
 
     fn put_tab(&mut self, _count: u16) {

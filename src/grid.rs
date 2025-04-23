@@ -182,10 +182,11 @@ impl Grid {
                     self.styles.active_text_color,
                     self.styles.active_background_color
                 );
-                self.cells[0].len()
+                self.width as usize
             ];
-            self.cells.len()
+            self.height as usize
         ];
+        self.scroll_pos = 0;
     }
 
     pub fn delete_character(&mut self) {

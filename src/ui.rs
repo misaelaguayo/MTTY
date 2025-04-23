@@ -262,6 +262,10 @@ impl Ui {
             Command::ResetStyles => {
                 self.grid.styles = Styles::default();
             }
+            Command::MoveCursorVerticalWithCarriageReturn(x) => {
+                let new_x = self.grid.cursor_pos.0 as i16 + x;
+                self.grid.set_pos(new_x as usize, 0);
+            }
             _ => {
                 println!("Unsupported command: {:?}", command);
             }
@@ -386,9 +390,9 @@ impl eframe::App for Ui {
                         .grid
                         .scroll_pos
                         .saturating_sub(self.grid.height as usize - 1);
-                    let end_row = min(self.grid.scroll_pos, self.grid.height as usize);
+                    let end_row = self.grid.active_grid().len();
 
-                    for i in start_row..end_row + 1 as usize {
+                    for i in start_row..end_row as usize {
                         for j in 0..self.grid.width as usize {
                             let cell = self.grid.active_grid()[i][j].clone();
                             let fg = self.grid.styles.to_color32(cell.fg);
