@@ -277,6 +277,9 @@ impl Handler for StateMachine {
 
     fn unset_private_mode(&mut self, mode: PrivateMode) {
         match mode {
+            PrivateMode::Named(NamedPrivateMode::ShowCursor) => {
+                self.tx.send(Command::HideCursor).unwrap();
+            }
             PrivateMode::Named(NamedPrivateMode::SwapScreenAndSetRestoreCursor) => {
                 self.tx
                     .send(Command::SwapScreenAndSetRestoreCursor)

@@ -89,6 +89,7 @@ pub enum Command {
     ClearLineBeforeCursor,
     ClearScreen,
     Exit,
+    HideCursor,
     IdentifyTerminal(IdentifyTerminalMode),
     LineFeed,
     MoveCursor(i16, i16),

@@ -266,6 +266,9 @@ impl Ui {
                 let new_x = self.grid.cursor_pos.0 as i16 + x;
                 self.grid.set_pos(new_x as usize, 0);
             }
+            Command::HideCursor => {
+                self.grid.hide_cursor();
+            }
             _ => {
                 println!("Unsupported command: {:?}", command);
             }
@@ -396,7 +399,7 @@ impl eframe::App for Ui {
                         for j in 0..self.grid.width as usize {
                             let cell = self.grid.active_grid()[i][j].clone();
                             let fg = self.grid.styles.to_color32(cell.fg);
-                            let bg = if i == self.grid.cursor_pos.0 && j == self.grid.cursor_pos.1 {
+                            let bg = if i == self.grid.cursor_pos.0 && j == self.grid.cursor_pos.1 && !self.grid.styles.cursor_hidden {
                                 Color32::WHITE
                             } else {
                                 self.grid.styles.to_color32(cell.bg)

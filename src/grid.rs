@@ -220,7 +220,13 @@ impl Grid {
         }
     }
 
-    pub fn show_cursor(&mut self) {}
+    pub fn show_cursor(&mut self) {
+        self.styles.cursor_hidden = false;
+    }
+
+    pub fn hide_cursor(&mut self) {
+        self.styles.cursor_hidden = true;
+    }
 
     pub fn save_cursor(&mut self) {
         self.saved_cursor_pos = self.cursor_pos;

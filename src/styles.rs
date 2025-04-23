@@ -332,6 +332,7 @@ pub struct Styles {
     pub font_size: u32,
     pub italic: bool,
     pub underline: bool,
+    pub cursor_hidden: bool,
     pub color_array: [Color; 256],
 }
 
@@ -370,6 +371,7 @@ impl Styles {
             italic: false,
             underline: false,
             color_array: Color::default_array(),
+            cursor_hidden: false,
         }
     }
 }
