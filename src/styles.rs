@@ -324,6 +324,40 @@ impl Color {
     }
 }
 
+pub enum CursorShape {
+    Block,
+    Underline,
+    Beam,
+    HollowBlock,
+    Hidden,
+}
+
+pub struct CursorState {
+    pub shape: CursorShape,
+    pub hidden: bool,
+}
+
+impl Default for CursorState {
+    fn default() -> Self {
+        Self {
+            shape: CursorShape::Beam,
+            hidden: false,
+        }
+    }
+}
+
+impl ToString for CursorState {
+    fn to_string(&self) -> String {
+        match self.shape {
+            CursorShape::Block => "▒".to_string(),
+            CursorShape::Underline => "_".to_string(),
+            CursorShape::Beam => "|".to_string(),
+            CursorShape::HollowBlock => "☐".to_string(),
+            CursorShape::Hidden => "".to_string(),
+        }
+    }
+}
+
 pub struct Styles {
     pub active_background_color: Color,
     pub default_background_color: Color,
@@ -332,8 +366,8 @@ pub struct Styles {
     pub font_size: u32,
     pub italic: bool,
     pub underline: bool,
-    pub cursor_hidden: bool,
     pub color_array: [Color; 256],
+    pub cursor_state: CursorState,
 }
 
 impl Styles {
@@ -371,7 +405,7 @@ impl Styles {
             italic: false,
             underline: false,
             color_array: Color::default_array(),
-            cursor_hidden: false,
+            cursor_state: CursorState::default(),
         }
     }
 }

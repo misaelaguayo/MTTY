@@ -311,8 +311,8 @@ impl Handler for StateMachine {
         println!("Set active charset");
     }
 
-    fn configure_charset(&mut self, _: CharsetIndex, _: StandardCharset) {
-        println!("Configure charset");
+    fn configure_charset(&mut self, c: CharsetIndex, typ: StandardCharset) {
+        println!("Configure charset: {:?} {:?}", c, typ);
     }
 
     fn set_color(&mut self, i: usize, rgb: Rgb) {

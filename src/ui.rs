@@ -3,7 +3,7 @@ use std::{
     sync::{atomic::AtomicBool, Arc},
 };
 
-use eframe::egui::{self, Color32};
+use eframe::egui::{self};
 use tokio::sync::broadcast::{Receiver, Sender};
 
 use crate::{
@@ -398,17 +398,19 @@ impl eframe::App for Ui {
                     for i in start_row..end_row as usize {
                         for j in 0..self.grid.width as usize {
                             let cell = self.grid.active_grid()[i][j].clone();
-                            let fg = self.grid.styles.to_color32(cell.fg);
-                            let bg = if i == self.grid.cursor_pos.0 && j == self.grid.cursor_pos.1 && !self.grid.styles.cursor_hidden {
-                                Color32::WHITE
+
+                            let cell_text = if i == self.grid.cursor_pos.0
+                                && j == self.grid.cursor_pos.1
+                            {
+                                self.grid.styles.cursor_state.to_string()
                             } else {
-                                self.grid.styles.to_color32(cell.bg)
+                                cell.to_string()
                             };
 
                             ui.monospace(
-                                egui::RichText::new(cell.to_string())
-                                    .color(fg)
-                                    .background_color(bg),
+                                egui::RichText::new(cell_text)
+                                    .color(self.grid.styles.to_color32(cell.fg))
+                                    .background_color(self.grid.styles.to_color32(cell.bg)),
                             );
                         }
                         ui.end_row();

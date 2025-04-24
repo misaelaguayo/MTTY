@@ -65,12 +65,12 @@ impl SgrAttribute {
             Attr::CancelBlink => SgrAttribute::CancelBlink,
             Attr::CancelReverse => SgrAttribute::CancelReverse,
             Attr::CancelHidden => SgrAttribute::CancelHidden,
+            Attr::CancelStrike => SgrAttribute::CancelStrike,
             Attr::Foreground(color) => SgrAttribute::Foreground(Color::from_vte_color(color)),
             Attr::Background(color) => SgrAttribute::Background(Color::from_vte_color(color)),
             Attr::UnderlineColor(color) => {
                 SgrAttribute::UnderlineColor(color.map(Color::from_vte_color))
             }
-            _ => panic!("Unsupported attribute"),
         }
     }
 }
