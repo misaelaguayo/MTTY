@@ -399,13 +399,12 @@ impl eframe::App for Ui {
                         for j in 0..self.grid.width as usize {
                             let cell = self.grid.active_grid()[i][j].clone();
 
-                            let cell_text = if i == self.grid.cursor_pos.0
-                                && j == self.grid.cursor_pos.1
-                            {
-                                self.grid.styles.cursor_state.to_string()
-                            } else {
-                                cell.to_string()
-                            };
+                            let cell_text =
+                                if i == self.grid.cursor_pos.0 && j == self.grid.cursor_pos.1 {
+                                    self.grid.styles.cursor_state.to_string()
+                                } else {
+                                    cell.to_string()
+                                };
 
                             ui.monospace(
                                 egui::RichText::new(cell_text)
