@@ -9,7 +9,7 @@ use tokio::sync::broadcast::{Receiver, Sender};
 use crate::{
     commands::{Command, IdentifyTerminalMode, SgrAttribute},
     config::Config,
-    grid::Grid,
+    grid::{Cell, Grid},
     styles::{Color, Styles},
 };
 
@@ -141,38 +141,58 @@ impl Ui {
                 self.grid.set_pos(self.grid.cursor_pos.0, new_y as usize);
             }
             Command::MoveCursorVertical(x) => {
-                let new_x = self.grid.cursor_pos.1 as i16 + x;
-                self.grid.set_pos(new_x as usize, self.grid.cursor_pos.0);
+                let new_x = self.grid.cursor_pos.0 as i16 + x;
+                self.grid.set_pos(new_x as usize, self.grid.cursor_pos.1);
             }
             Command::ClearLineAfterCursor => {
                 let (row, col) = self.grid.cursor_pos;
                 for i in col..self.grid.width as usize {
-                    self.grid.active_grid()[row][i].char = ' ';
+                    self.grid.active_grid()[row][i] = Cell::new(
+                        ' ',
+                        self.grid.styles.active_text_color,
+                        self.grid.styles.active_background_color,
+                    );
                 }
             }
             Command::ClearLineBeforeCursor => {
                 let (row, col) = self.grid.cursor_pos;
                 for i in 0..col {
-                    self.grid.active_grid()[row][i].char = ' ';
+                    self.grid.active_grid()[row][i] = Cell::new(
+                        ' ',
+                        self.grid.styles.active_text_color,
+                        self.grid.styles.active_background_color,
+                    );
                 }
             }
             Command::ClearLine => {
                 let (row, _) = self.grid.cursor_pos;
                 for i in 0..self.grid.width as usize {
-                    self.grid.active_grid()[row][i].char = ' ';
+                    self.grid.active_grid()[row][i] = Cell::new(
+                        ' ',
+                        self.grid.styles.active_text_color,
+                        self.grid.styles.active_background_color,
+                    );
                 }
             }
             Command::ClearBelow => {
                 // first clear after cursor
                 let (row, col) = self.grid.cursor_pos;
                 for i in col..self.grid.width as usize {
-                    self.grid.active_grid()[row][i].char = ' ';
+                    self.grid.active_grid()[row][i] = Cell::new(
+                        ' ',
+                        self.grid.styles.active_text_color,
+                        self.grid.styles.active_background_color,
+                    );
                 }
 
                 // then clear below
                 for i in row + 1..self.grid.height as usize {
                     for j in 0..self.grid.width as usize {
-                        self.grid.active_grid()[i][j].char = ' ';
+                        self.grid.active_grid()[i][j] = Cell::new(
+                            ' ',
+                            self.grid.styles.active_text_color,
+                            self.grid.styles.active_background_color,
+                        );
                     }
                 }
             }
@@ -180,13 +200,21 @@ impl Ui {
                 // first clear before cursor
                 let (row, col) = self.grid.cursor_pos;
                 for i in 0..col {
-                    self.grid.active_grid()[row][i].char = ' ';
+                    self.grid.active_grid()[row][i] = Cell::new(
+                        ' ',
+                        self.grid.styles.active_text_color,
+                        self.grid.styles.active_background_color,
+                    );
                 }
 
                 // then clear above
                 for i in 0..row {
                     for j in 0..self.grid.width as usize {
-                        self.grid.active_grid()[i][j].char = ' ';
+                        self.grid.active_grid()[i][j] = Cell::new(
+                            ' ',
+                            self.grid.styles.active_text_color,
+                            self.grid.styles.active_background_color,
+                        );
                     }
                 }
             }
@@ -196,7 +224,11 @@ impl Ui {
                     if col + i as usize >= self.grid.width as usize {
                         break;
                     }
-                    self.grid.active_grid()[row][col + i as usize].char = ' ';
+                    self.grid.active_grid()[row][col + i as usize] = Cell::new(
+                        ' ',
+                        self.grid.styles.active_text_color,
+                        self.grid.styles.active_background_color,
+                    );
                 }
             }
             Command::SGR(command) => {
@@ -228,7 +260,11 @@ impl Ui {
                 let (row, col) = self.grid.cursor_pos;
                 if col < self.grid.width as usize - 5 {
                     for i in col..col + 4 {
-                        self.grid.active_grid()[row][i].char = ' ';
+                        self.grid.active_grid()[row][i] = Cell::new(
+                            ' ',
+                            self.grid.styles.active_text_color,
+                            self.grid.styles.active_background_color,
+                        );
                         self.grid.set_pos(row, i + 1);
                     }
                 }
