@@ -8,5 +8,6 @@ Simple terminal written in rust
 
 
 
-- [ ] Add more OS support (only mac for now)
-- [ ] Add scrolling
+Missing Features
+- [ ] Allow terminal resizing
+- [ ] OS support besides mac
