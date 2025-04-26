@@ -324,6 +324,7 @@ impl Color {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum CursorShape {
     Block,
     Underline,
@@ -332,9 +333,16 @@ pub enum CursorShape {
     Hidden,
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct CursorState {
     pub shape: CursorShape,
     pub hidden: bool,
+}
+
+impl CursorState {
+    pub fn new(shape: CursorShape, hidden: bool) -> Self {
+        Self { shape, hidden }
+    }
 }
 
 impl Default for CursorState {

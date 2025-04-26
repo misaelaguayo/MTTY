@@ -1,6 +1,6 @@
 use vte::ansi::{Attr, Rgb};
 
-use crate::styles::Color;
+use crate::styles::{Color, CursorShape, CursorState};
 
 #[derive(Debug, Clone)]
 pub enum IdentifyTerminalMode {
@@ -111,4 +111,7 @@ pub enum Command {
     SetColor(usize, Rgb),
     ShowCursor,
     SwapScreenAndSetRestoreCursor,
+    DeleteLines(i16),
+    SetCursorState(CursorState),
+    SetCursorShape(CursorShape),
 }

@@ -305,6 +305,20 @@ impl Ui {
             Command::HideCursor => {
                 self.grid.hide_cursor();
             }
+            Command::DeleteLines(count) => {
+                let (row, _) = self.grid.cursor_pos;
+                // delete lines at cursor position
+
+                for _ in row..row + count as usize + 1 {
+                    self.grid.active_grid().remove(row);
+                }
+            }
+            Command::SetCursorState(state) => {
+                self.grid.styles.cursor_state = state;
+            }
+            Command::SetCursorShape(shape) => {
+                self.grid.styles.cursor_state.shape = shape;
+            }
             _ => {
                 println!("Unsupported command: {:?}", command);
             }

@@ -1,12 +1,15 @@
 use tokio::sync::broadcast::Sender;
 use vte::ansi::{
-    cursor_icon, Attr, CharsetIndex, ClearMode, CursorShape, CursorStyle, Handler, Hyperlink,
-    KeyboardModes, KeyboardModesApplyBehavior, LineClearMode, Mode, ModifyOtherKeys,
-    NamedPrivateMode, PrivateMode, Rgb, ScpCharPath, ScpUpdateMode, StandardCharset,
-    TabulationClearMode,
+    cursor_icon, Attr, CharsetIndex, ClearMode, CursorShape as VteCursorShape, CursorStyle,
+    Handler, Hyperlink, KeyboardModes, KeyboardModesApplyBehavior, LineClearMode, Mode,
+    ModifyOtherKeys, NamedPrivateMode, PrivateMode, Rgb, ScpCharPath, ScpUpdateMode,
+    StandardCharset, TabulationClearMode,
 };
 
-use crate::commands::{Command, IdentifyTerminalMode, SgrAttribute};
+use crate::{
+    commands::{Command, IdentifyTerminalMode, SgrAttribute},
+    styles::{CursorShape, CursorState},
+};
 
 pub struct StateMachine {
     tx: Sender<Command>,
@@ -23,12 +26,36 @@ impl Handler for StateMachine {
         println!("Set title");
     }
 
-    fn set_cursor_style(&mut self, _: Option<CursorStyle>) {
-        println!("Set cursor style");
+    fn set_cursor_style(&mut self, s: Option<CursorStyle>) {
+        match s {
+            Some(s) => {
+                let blinking = s.blinking;
+                let shape = match s.shape {
+                    VteCursorShape::Block => CursorShape::Block,
+                    VteCursorShape::Underline => CursorShape::Underline,
+                    VteCursorShape::Beam => CursorShape::Beam,
+                    VteCursorShape::HollowBlock => CursorShape::HollowBlock,
+                    VteCursorShape::Hidden => CursorShape::Hidden,
+                };
+
+                self.tx
+                    .send(Command::SetCursorState(CursorState::new(shape, blinking)))
+                    .unwrap();
+            }
+            None => {}
+        }
     }
 
-    fn set_cursor_shape(&mut self, shape: CursorShape) {
-        println!("Set cursor shape: {:?}", shape);
+    fn set_cursor_shape(&mut self, shape: VteCursorShape) {
+        let cursor_shape = match shape {
+            VteCursorShape::Block => CursorShape::Block,
+            VteCursorShape::Underline => CursorShape::Underline,
+            VteCursorShape::Beam => CursorShape::Beam,
+            VteCursorShape::HollowBlock => CursorShape::HollowBlock,
+            VteCursorShape::Hidden => CursorShape::Hidden,
+        };
+
+        self.tx.send(Command::SetCursorShape(cursor_shape)).unwrap();
     }
 
     fn input(&mut self, c: char) {
@@ -164,8 +191,8 @@ impl Handler for StateMachine {
         println!("Insert blank lines");
     }
 
-    fn delete_lines(&mut self, _: usize) {
-        println!("Delete lines");
+    fn delete_lines(&mut self, l: usize) {
+        self.tx.send(Command::DeleteLines(l as i16)).unwrap();
     }
 
     fn erase_chars(&mut self, c: usize) {
@@ -295,8 +322,8 @@ impl Handler for StateMachine {
         println!("Report private mode");
     }
 
-    fn set_scrolling_region(&mut self, _top: usize, _bottom: Option<usize>) {
-        println!("Set scrolling region");
+    fn set_scrolling_region(&mut self, top: usize, bottom: Option<usize>) {
+        println!("Set scrolling region: {} {:?}", top, bottom);
     }
 
     fn set_keypad_application_mode(&mut self) {
