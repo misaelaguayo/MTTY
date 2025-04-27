@@ -4,6 +4,9 @@ use crate::{
     styles::{Color, Styles},
 };
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Debug, Clone)]
 pub struct Cell {
     pub char: char,
