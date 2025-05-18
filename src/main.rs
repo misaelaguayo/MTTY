@@ -70,12 +70,11 @@ fn start_ui(
 
 fn redraw(ctx: egui::Context, mut rx: broadcast::Receiver<Command>, exit_flag: Arc<AtomicBool>) {
     loop {
+        if exit_flag.load(std::sync::atomic::Ordering::Acquire) {
+            break;
+        }
         while let Ok(_) = rx.try_recv() {
             ctx.request_repaint();
-        }
-
-        if exit_flag.load(std::sync::atomic::Ordering::Relaxed) {
-            break;
         }
     }
 }

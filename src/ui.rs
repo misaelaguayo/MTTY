@@ -146,90 +146,39 @@ impl Ui {
             }
             Command::ClearLineAfterCursor => {
                 let (row, col) = self.grid.cursor_pos;
-                for i in col..self.grid.width as usize {
-                    self.grid.active_grid()[row][i] = Cell::new(
-                        ' ',
-                        self.grid.styles.active_text_color,
-                        self.grid.styles.active_background_color,
-                    );
-                }
+                self.clear_cells(row, col..self.grid.width as usize);
             }
             Command::ClearLineBeforeCursor => {
                 let (row, col) = self.grid.cursor_pos;
-                for i in 0..col {
-                    self.grid.active_grid()[row][i] = Cell::new(
-                        ' ',
-                        self.grid.styles.active_text_color,
-                        self.grid.styles.active_background_color,
-                    );
-                }
+                self.clear_cells(row, 0..col);
             }
             Command::ClearLine => {
                 let (row, _) = self.grid.cursor_pos;
-                for i in 0..self.grid.width as usize {
-                    self.grid.active_grid()[row][i] = Cell::new(
-                        ' ',
-                        self.grid.styles.active_text_color,
-                        self.grid.styles.active_background_color,
-                    );
-                }
+                self.clear_cells(row, 0..self.grid.width as usize);
             }
             Command::ClearBelow => {
                 // first clear after cursor
                 let (row, col) = self.grid.cursor_pos;
-                for i in col..self.grid.width as usize {
-                    self.grid.active_grid()[row][i] = Cell::new(
-                        ' ',
-                        self.grid.styles.active_text_color,
-                        self.grid.styles.active_background_color,
-                    );
-                }
+                self.clear_cells(row, col..self.grid.width as usize);
 
                 // then clear below
                 for i in row + 1..self.grid.height as usize {
-                    for j in 0..self.grid.width as usize {
-                        self.grid.active_grid()[i][j] = Cell::new(
-                            ' ',
-                            self.grid.styles.active_text_color,
-                            self.grid.styles.active_background_color,
-                        );
-                    }
+                    self.clear_cells(i, 0..self.grid.width as usize);
                 }
             }
             Command::ClearAbove => {
                 // first clear before cursor
                 let (row, col) = self.grid.cursor_pos;
-                for i in 0..col {
-                    self.grid.active_grid()[row][i] = Cell::new(
-                        ' ',
-                        self.grid.styles.active_text_color,
-                        self.grid.styles.active_background_color,
-                    );
-                }
+                self.clear_cells(row, 0..col);
 
                 // then clear above
                 for i in 0..row {
-                    for j in 0..self.grid.width as usize {
-                        self.grid.active_grid()[i][j] = Cell::new(
-                            ' ',
-                            self.grid.styles.active_text_color,
-                            self.grid.styles.active_background_color,
-                        );
-                    }
+                    self.clear_cells(i, 0..self.grid.width as usize);
                 }
             }
             Command::ClearCount(count) => {
                 let (row, col) = self.grid.cursor_pos;
-                for i in 0..count {
-                    if col + i as usize >= self.grid.width as usize {
-                        break;
-                    }
-                    self.grid.active_grid()[row][col + i as usize] = Cell::new(
-                        ' ',
-                        self.grid.styles.active_text_color,
-                        self.grid.styles.active_background_color,
-                    );
-                }
+                self.clear_cells(row, col..col + count as usize);
             }
             Command::SGR(command) => {
                 self.handle_sgr_attribute(command);
@@ -322,6 +271,16 @@ impl Ui {
             _ => {
                 println!("Unsupported command: {:?}", command);
             }
+        }
+    }
+
+    fn clear_cells(&mut self, row: usize, col_range: std::ops::Range<usize>) {
+        for i in col_range {
+            self.grid.active_grid()[row][i] = Cell::new(
+                ' ',
+                self.grid.styles.active_text_color,
+                self.grid.styles.active_background_color,
+            );
         }
     }
 

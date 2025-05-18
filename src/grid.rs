@@ -3,6 +3,8 @@ use crate::{
     config::Config,
     styles::{Color, Styles},
 };
+use std::fmt;
+
 
 #[cfg(test)]
 mod tests;
@@ -26,9 +28,9 @@ impl Default for Cell {
     }
 }
 
-impl ToString for Cell {
-    fn to_string(&self) -> String {
-        String::from(self.char)
+impl fmt::Display for Cell {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.char)
     }
 }
 
@@ -186,23 +188,17 @@ impl Grid {
     }
 
     pub fn delete_character(&mut self) {
-        let (mut row, mut col) = self.cursor_pos;
+        let (row, col) = self.cursor_pos;
         let cols = self.width as usize;
         let fg = self.styles.active_text_color;
         let bg = self.styles.active_background_color;
 
-        if col > 0 {
-            (row, col) = self.cursor_pos;
-            self.active_grid()[row][col] = Cell::new(' ', fg, bg);
+        self.active_grid()[row][col] = Cell::new(' ', fg, bg);
 
+        if col > 0 {
             self.set_pos(row, col - 1);
         } else if row > 0 {
-            (row, col) = self.cursor_pos;
-            self.active_grid()[row][col] = Cell::new(' ', fg, bg);
-
             self.set_pos(row - 1, cols - 1);
-        } else {
-            self.active_grid()[row][col] = Cell::new(' ', fg, bg);
         }
     }
 
