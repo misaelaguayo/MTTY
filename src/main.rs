@@ -18,15 +18,15 @@ pub mod term;
 pub mod ui;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), std::io::Error> {
     let config = config::Config::default();
 
     // Flag set when ui is closed and signals background threads to exit
     let exit_flag = Arc::new(AtomicBool::new(false));
 
-    let term = term::Term::new(&config).unwrap();
-    let read_fd = term.parent.try_clone().unwrap();
-    let write_fd = term.parent.try_clone().unwrap();
+    let term = term::Term::new(&config)?;
+    let read_fd = term.parent.try_clone()?;
+    let write_fd = term.parent.try_clone()?;
 
     let (output_tx, output_rx_ui) = broadcast::channel(10000);
 
@@ -37,6 +37,8 @@ async fn main() {
     term::spawn_write_thread(write_fd, input_rx, exit_flag.clone());
 
     start_ui(&config, exit_flag, input_tx, output_rx_ui);
+
+    Ok(())
 }
 
 fn start_ui(
