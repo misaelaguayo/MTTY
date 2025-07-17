@@ -5,7 +5,6 @@ use std::{
 
 use commands::Command;
 use config::Config;
-use eframe::egui::{self};
 use tokio::sync::broadcast;
 
 pub mod commands;
@@ -47,36 +46,4 @@ fn start_ui(
     tx: broadcast::Sender<Vec<u8>>,
     rx_ui: broadcast::Receiver<Command>,
 ) {
-    let options = eframe::NativeOptions {
-        viewport: eframe::egui::ViewportBuilder::default()
-            .with_inner_size([config.width, config.height]),
-        ..Default::default()
-    };
-
-    let rx_remote = rx_ui.resubscribe();
-    let redraw_exit_flag = exit_flag.clone();
-
-    let _ = eframe::run_native(
-        "MTTY",
-        options,
-        Box::new(|cc| {
-            let ctx = cc.egui_ctx.clone();
-            fonts::configure_text_styles(&ctx, &config);
-            tokio::spawn(async move {
-                redraw(ctx, rx_remote, redraw_exit_flag);
-            });
-            return Ok(Box::new(ui::Ui::new(config, exit_flag, tx, rx_ui)));
-        }),
-    );
-}
-
-fn redraw(ctx: egui::Context, mut rx: broadcast::Receiver<Command>, exit_flag: Arc<AtomicBool>) {
-    loop {
-        if exit_flag.load(std::sync::atomic::Ordering::Acquire) {
-            break;
-        }
-        while let Ok(_) = rx.try_recv() {
-            ctx.request_repaint();
-        }
-    }
 }
