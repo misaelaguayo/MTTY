@@ -179,6 +179,15 @@ impl Term {
         ]);
         command
     }
+
+    #[cfg(target_os = "linux")]
+    fn default_shell_command() -> Command {
+        let shell = env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
+
+        let mut command = Command::new(shell);
+        command.arg("--login");
+        command
+    }
 }
 
 fn enable_raw_mode(termios: &mut Termios) {

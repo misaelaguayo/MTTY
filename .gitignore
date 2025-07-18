@@ -3,3 +3,4 @@
 completions-jj.nu
 examples/**/target
 .direnv/
+.idea/
