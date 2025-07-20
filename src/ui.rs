@@ -209,7 +209,7 @@ impl Ui {
                 let (row, col) = self.grid.cursor_pos;
                 if col < self.grid.width as usize - 5 {
                     for i in col..col + 4 {
-                        self.grid.active_grid()[row][i] = Cell::new(
+                        self.grid.write_active_grid()[row][i] = Cell::new(
                             ' ',
                             self.grid.styles.active_text_color,
                             self.grid.styles.active_background_color,
@@ -259,7 +259,7 @@ impl Ui {
                 // delete lines at cursor position
 
                 for _ in row..row + count as usize + 1 {
-                    self.grid.active_grid().remove(row);
+                    self.grid.write_active_grid().remove(row);
                 }
             }
             Command::SetCursorState(state) => {
@@ -276,7 +276,7 @@ impl Ui {
 
     fn clear_cells(&mut self, row: usize, col_range: std::ops::Range<usize>) {
         for i in col_range {
-            self.grid.active_grid()[row][i] = Cell::new(
+            self.grid.write_active_grid()[row][i] = Cell::new(
                 ' ',
                 self.grid.styles.active_text_color,
                 self.grid.styles.active_background_color,
@@ -356,7 +356,7 @@ impl Ui {
                     );
                 } else {
                     self.grid.scroll_pos = min(
-                        self.grid.active_grid().len().saturating_sub(1),
+                        self.grid.read_active_grid().len().saturating_sub(1),
                         self.grid.scroll_pos + 1,
                     );
                 }
@@ -402,11 +402,11 @@ impl eframe::App for Ui {
                         .grid
                         .scroll_pos
                         .saturating_sub(self.grid.height as usize - 1);
-                    let end_row = self.grid.active_grid().len();
+                    let end_row = self.grid.read_active_grid().len();
 
                     for i in start_row..end_row as usize {
                         for j in 0..self.grid.width as usize {
-                            let cell = self.grid.active_grid()[i][j].clone();
+                            let cell = self.grid.read_active_grid()[i][j].clone();
 
                             let cell_text =
                                 if i == self.grid.cursor_pos.0 && j == self.grid.cursor_pos.1 {

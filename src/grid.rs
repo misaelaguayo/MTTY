@@ -76,7 +76,15 @@ impl Grid {
         }
     }
 
-    pub fn active_grid(&mut self) -> &mut Vec<Vec<Cell>> {
+    pub fn read_active_grid(&self) -> &Vec<Vec<Cell>> {
+        if self.alternate {
+            &self.alternate_screen
+        } else {
+            &self.cells
+        }
+    }
+
+    pub fn write_active_grid(&mut self) -> &mut Vec<Vec<Cell>> {
         if self.alternate {
             &mut self.alternate_screen
         } else {
@@ -115,7 +123,7 @@ impl Grid {
             self.styles.active_background_color, self.styles.active_text_color
         );
 
-        for row in self.active_grid() {
+        for row in self.read_active_grid() {
             for cell in row {
                 if cell.char == ' ' {
                     print!(".");
@@ -128,7 +136,7 @@ impl Grid {
     }
 
     pub fn set_pos(&mut self, row: usize, col: usize) {
-        let rows = self.active_grid().len();
+        let rows = self.read_active_grid().len();
         if row >= rows {
             self.add_rows(row - rows + 1);
             self.scroll_pos = row;
@@ -139,11 +147,11 @@ impl Grid {
 
     pub fn add_rows(&mut self, rows: usize) {
         let cols = self.width;
-        let curr_rows = self.active_grid().len();
+        let curr_rows = self.read_active_grid().len();
         let fg = self.styles.active_text_color;
         let bg = self.styles.active_background_color;
 
-        self.active_grid().resize_with(curr_rows + rows, || {
+        self.write_active_grid().resize_with(curr_rows + rows, || {
             vec![Cell::new(' ', fg, bg); cols as usize]
         });
     }
@@ -167,7 +175,7 @@ impl Grid {
                 self.set_pos(row, 0);
             }
             _ => {
-                self.active_grid()[row][col] = Cell::new(c, fg, bg);
+                self.write_active_grid()[row][col] = Cell::new(c, fg, bg);
                 self.set_pos(row, col + 1);
             }
         }
@@ -177,7 +185,7 @@ impl Grid {
         let fg = self.styles.active_text_color;
         let bg = self.styles.active_background_color;
 
-        for row in self.active_grid() {
+        for row in self.write_active_grid() {
             for cell in row {
                 *cell = Cell::new(' ', fg, bg);
             }
@@ -192,7 +200,7 @@ impl Grid {
         let fg = self.styles.active_text_color;
         let bg = self.styles.active_background_color;
 
-        self.active_grid()[row][col] = Cell::new(' ', fg, bg);
+        self.write_active_grid()[row][col] = Cell::new(' ', fg, bg);
 
         if col > 0 {
             self.set_pos(row, col - 1);

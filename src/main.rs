@@ -6,10 +6,12 @@ use std::{
 use commands::Command;
 use config::Config;
 use iced::{
-    widget::{button, column, text, Column, Row},
-    Element, Theme,
+    widget::{button, text, Column, Row},
+    Element,
 };
 use tokio::sync::broadcast;
+
+use crate::grid::{Cell, Grid};
 
 pub mod commands;
 pub mod config;
@@ -53,9 +55,8 @@ fn start_ui(
     tx: broadcast::Sender<Vec<u8>>,
     rx_ui: broadcast::Receiver<Command>,
 ) -> iced::Result {
-    let app = iced::application("title", App::update, App::view);
-
-    app.run()
+    println!("Starting UI...");
+    iced::application("title", App::update, App::view).run()
 }
 
 #[derive(Debug, Clone)]
@@ -65,23 +66,27 @@ enum Message {
 }
 
 struct App {
-    grid: Vec<Vec<char>>,
+    grid: Grid,
 }
 
 impl Default for App {
     fn default() -> Self {
-        let grid = vec![vec!['.'; 80]; 24]; // Initialize a grid of 80x24 with spaces
-        App { grid }
+        let config = Config::default();
+        App {
+            grid: Grid::new(&config),
+        }
     }
 }
 
 impl App {
     fn view(&self) -> iced::Element<Message> {
+        println!("Rendering UI...");
         let mut rows: Vec<Element<Message>> = self
             .grid
+            .read_active_grid()
             .iter()
             .map(|row| {
-                Row::from_vec(row.iter().map(|&c| text(c.to_string()).into()).collect()).into()
+                Row::from_vec(row.iter().map(|c| text(c.to_string()).into()).collect()).into()
             })
             .collect();
 
@@ -95,12 +100,17 @@ impl App {
     }
 
     fn update(&mut self, message: Message) {
+        println!("Updating UI with message: {:?}", message);
         match message {
             Message::Init => {
                 println!("UI initialized");
             }
             Message::Update => {
-                self.grid[0][0] = 'X'; // Example update to the grid
+                self.grid.write_active_grid()[0][0] = Cell::new(
+                    'X',
+                    self.grid.styles.active_text_color,
+                    self.grid.styles.active_background_color,
+                );
             }
         }
     }

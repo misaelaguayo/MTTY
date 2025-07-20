@@ -2,7 +2,6 @@
 
 nixpkgs.mkShell {
   buildInputs = with nixpkgs; [
-    cargo
     rustc
     rustup
     nixpkgs-fmt
