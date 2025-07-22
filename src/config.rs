@@ -12,7 +12,7 @@ impl Default for Config {
         const HEIGHT: f32 = 480.0;
         const FONT_SIZE: f32 = 12.0;
 
-        let rows = 35;
+        let rows = 28;
         let cols = 106;
 
         Self {
