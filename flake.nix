@@ -12,6 +12,6 @@
         };
       in
       {
-        devShells.default = pkgs.callPackage ./default.nix { nixpkgs = pkgs; };
+        devShells.default = pkgs.callPackage ./default.nix { nixpkgs = pkgs; system = system; };
       });
 }

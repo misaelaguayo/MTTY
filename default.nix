@@ -1,4 +1,4 @@
-{ nixpkgs }:
+{ nixpkgs, system }:
 
 nixpkgs.mkShell {
   buildInputs = with nixpkgs; [
@@ -22,8 +22,10 @@ nixpkgs.mkShell {
     export RUSTDOCFLAGS="-Cpanic=abort";
     export LLVM_PROFILE_FILE="coverage.profraw";
     export CARGO_INCREMENTAL=0;
-    export ICED_BACKEND="tiny-skia";
   '';
+
+  # Set iced backend based on system
+  ICED_BACKEND = if system == "x86_64-linux" then "tiny-skia" else "wgpu";
 
   LD_LIBRARY_PATH = "${nixpkgs.libxkbcommon}/lib";
 }
