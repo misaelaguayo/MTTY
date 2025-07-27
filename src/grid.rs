@@ -44,6 +44,7 @@ impl Cell {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Grid {
     cells: Vec<Vec<Cell>>,
     alternate_screen: Vec<Vec<Cell>>,

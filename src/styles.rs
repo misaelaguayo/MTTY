@@ -366,6 +366,7 @@ impl ToString for CursorState {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Styles {
     pub active_background_color: Color,
     pub default_background_color: Color,

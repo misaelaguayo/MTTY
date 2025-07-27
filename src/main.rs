@@ -6,8 +6,9 @@ use std::{
 use commands::Command;
 use config::Config;
 use iced::{
-    widget::{button, text, Column, Row},
-    Element, Task,
+    stream,
+    widget::{text, Column, Row},
+    Element, Subscription, Task,
 };
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::{Receiver, Sender};
@@ -56,17 +57,12 @@ fn start_ui(
     tx: broadcast::Sender<Vec<u8>>,
     rx_ui: broadcast::Receiver<Command>,
 ) -> iced::Result {
-    println!("Starting UI...");
     iced::application("Title", App::update, App::view)
+        .subscription(App::subscription)
         .run_with(move || App::new(&config, exit_flag, tx, rx_ui))
 }
 
-#[derive(Debug, Clone)]
-enum Message {
-    Init,
-    Update,
-}
-
+#[derive(Debug)]
 struct App {
     exit_flag: Arc<AtomicBool>,
     input: String,
@@ -82,6 +78,14 @@ impl App {
             Command::Print(c) => {
                 self.grid.place_character_in_grid(cols, c);
             }
+            Command::Put(c) => {
+                self.tx
+                    .send(vec![c as u8])
+                    .expect("Failed to send character");
+            }
+            Command::Backspace => {
+                self.tx.send(vec![8]).expect("Failed to send backspace");
+            }
             _ => {}
         }
     }
@@ -91,9 +95,7 @@ impl App {
         exit_flag: Arc<AtomicBool>,
         tx: Sender<Vec<u8>>,
         rx: Receiver<Command>,
-    ) -> (Self, Task<Message>) {
-        println!("Creating new App instance...");
-
+    ) -> (Self, Task<Command>) {
         (
             Self {
                 exit_flag,
@@ -102,13 +104,12 @@ impl App {
                 rx,
                 grid: Grid::new(config),
             },
-            Task::done(Message::Init),
+            Task::none(),
         )
     }
 
-    fn view(&self) -> iced::Element<Message> {
-        println!("Rendering UI...");
-        let mut rows: Vec<Element<Message>> = self
+    fn view(&self) -> iced::Element<Command> {
+        let rows: Vec<Element<Command>> = self
             .grid
             .read_active_grid()
             .iter()
@@ -117,26 +118,48 @@ impl App {
             })
             .collect();
 
-        rows.push(
-            Row::new()
-                .push(button("Exit").on_press(Message::Update))
-                .into(),
-        );
-
         Column::from_vec(rows).into()
     }
 
-    fn update(&mut self, message: Message) {
-        println!("Updating UI with message: {:?}", message);
-        match message {
-            Message::Init => {
-                println!("UI initialized");
-            }
-            Message::Update => {
-                while let Ok(command) = self.rx.try_recv() {
-                    self.handle_command(command);
+    fn update(&mut self, command: Command) {
+        self.handle_command(command);
+    }
+
+    fn subscription(&self) -> Subscription<Command> {
+        let mut rx = self.rx.resubscribe();
+
+        let client_subscription = iced::event::listen_with(|event, _status, _id| match event {
+            iced::event::Event::Keyboard(iced::keyboard::Event::KeyPressed {
+                key, text, ..
+            }) => {
+                if let Some(t) = text {
+                    return Some(Command::Put(t.to_string().chars().next().unwrap()));
                 }
+
+                match key {
+                    iced::keyboard::Key::Named(iced::keyboard::key::Named::Backspace) => {
+                        return Some(Command::Backspace);
+                    }
+                    iced::keyboard::Key::Named(iced::keyboard::key::Named::Enter) => {
+                        return Some(Command::NewLine);
+                    }
+                    _ => {}
+                }
+
+                None
             }
-        }
+            _ => None,
+        });
+
+        let server_subscription = Subscription::run_with_id(
+            "server",
+            stream::channel(10000, |mut tx| async move {
+                while let Ok(command) = rx.recv().await {
+                    tx.try_send(command).expect("Failed to send command");
+                }
+            }),
+        );
+
+        Subscription::batch(vec![client_subscription, server_subscription])
     }
 }

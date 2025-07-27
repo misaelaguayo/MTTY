@@ -100,6 +100,7 @@ pub enum Command {
     MoveCursorVerticalWithCarriageReturn(i16),
     NewLine,
     Print(char),
+    Put(char),
     PutTab,
     ReportCondition(bool),
     ReportCursorPosition,
