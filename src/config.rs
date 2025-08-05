@@ -1,3 +1,4 @@
+#[derive(Clone)]
 pub struct Config {
     pub width: f32,
     pub height: f32,

@@ -76,7 +76,13 @@ impl SgrAttribute {
 }
 
 #[derive(Debug, Clone)]
-pub enum Command {
+pub enum ServerCommand {
+    Resize(u16, u16),
+    RawData(Vec<u8>),
+}
+
+#[derive(Debug, Clone)]
+pub enum ClientCommand {
     AlternateScreenBuffer(bool),
     Backspace,
     BrackPasteMode(bool),

@@ -7,16 +7,16 @@ use vte::ansi::{
 };
 
 use crate::{
-    commands::{Command, IdentifyTerminalMode, SgrAttribute},
+    commands::{ClientCommand, IdentifyTerminalMode, SgrAttribute},
     styles::{CursorShape, CursorState},
 };
 
 pub struct StateMachine {
-    tx: Sender<Command>,
+    tx: Sender<ClientCommand>,
 }
 
 impl StateMachine {
-    pub fn new(tx: Sender<Command>) -> Self {
+    pub fn new(tx: Sender<ClientCommand>) -> Self {
         Self { tx }
     }
 }
@@ -39,7 +39,7 @@ impl Handler for StateMachine {
                 };
 
                 self.tx
-                    .send(Command::SetCursorState(CursorState::new(shape, blinking)))
+                    .send(ClientCommand::SetCursorState(CursorState::new(shape, blinking)))
                     .unwrap();
             }
             _ => {}
@@ -55,25 +55,25 @@ impl Handler for StateMachine {
             VteCursorShape::Hidden => CursorShape::Hidden,
         };
 
-        self.tx.send(Command::SetCursorShape(cursor_shape)).unwrap();
+        self.tx.send(ClientCommand::SetCursorShape(cursor_shape)).unwrap();
     }
 
     fn input(&mut self, c: char) {
-        self.tx.send(Command::Print(c)).unwrap();
+        self.tx.send(ClientCommand::Print(c)).unwrap();
     }
 
     fn goto(&mut self, line: i32, col: usize) {
         self.tx
-            .send(Command::MoveCursor(line as i16, col as i16))
+            .send(ClientCommand::MoveCursor(line as i16, col as i16))
             .unwrap();
     }
 
     fn goto_line(&mut self, line: i32) {
-        self.tx.send(Command::MoveCursor(line as i16, 0)).unwrap();
+        self.tx.send(ClientCommand::MoveCursor(line as i16, 0)).unwrap();
     }
 
     fn goto_col(&mut self, col: usize) {
-        self.tx.send(Command::MoveCursor(0, col as i16)).unwrap();
+        self.tx.send(ClientCommand::MoveCursor(0, col as i16)).unwrap();
     }
 
     fn insert_blank(&mut self, count: usize) {
@@ -82,19 +82,19 @@ impl Handler for StateMachine {
 
     fn move_up(&mut self, u: usize) {
         self.tx
-            .send(Command::MoveCursorVertical(-(u as i16)))
+            .send(ClientCommand::MoveCursorVertical(-(u as i16)))
             .unwrap();
     }
 
     fn move_down(&mut self, d: usize) {
-        self.tx.send(Command::MoveCursorVertical(d as i16)).unwrap();
+        self.tx.send(ClientCommand::MoveCursorVertical(d as i16)).unwrap();
     }
 
     fn identify_terminal(&mut self, intermediate: Option<char>) {
         match intermediate {
             Some('>') => {
                 self.tx
-                    .send(Command::IdentifyTerminal(IdentifyTerminalMode::Secondary))
+                    .send(ClientCommand::IdentifyTerminal(IdentifyTerminalMode::Secondary))
                     .unwrap();
             }
             _ => {
@@ -107,10 +107,10 @@ impl Handler for StateMachine {
     fn device_status(&mut self, arg: usize) {
         match arg {
             5 => {
-                self.tx.send(Command::ReportCondition(true)).unwrap();
+                self.tx.send(ClientCommand::ReportCondition(true)).unwrap();
             }
             6 => {
-                self.tx.send(Command::ReportCursorPosition).unwrap();
+                self.tx.send(ClientCommand::ReportCursorPosition).unwrap();
             }
             _ => {
                 println!("Unknown device status: {}", arg);
@@ -120,42 +120,42 @@ impl Handler for StateMachine {
 
     fn move_forward(&mut self, col: usize) {
         self.tx
-            .send(Command::MoveCursorHorizontal(col as i16))
+            .send(ClientCommand::MoveCursorHorizontal(col as i16))
             .unwrap();
     }
 
     fn move_backward(&mut self, col: usize) {
         self.tx
-            .send(Command::MoveCursorHorizontal(-(col as i16)))
+            .send(ClientCommand::MoveCursorHorizontal(-(col as i16)))
             .unwrap();
     }
 
     fn move_down_and_cr(&mut self, _row: usize) {
         self.tx
-            .send(Command::MoveCursorVerticalWithCarriageReturn(1))
+            .send(ClientCommand::MoveCursorVerticalWithCarriageReturn(1))
             .unwrap();
     }
 
     fn move_up_and_cr(&mut self, _row: usize) {
         self.tx
-            .send(Command::MoveCursorVerticalWithCarriageReturn(-1))
+            .send(ClientCommand::MoveCursorVerticalWithCarriageReturn(-1))
             .unwrap();
     }
 
     fn put_tab(&mut self, _count: u16) {
-        self.tx.send(Command::PutTab).unwrap();
+        self.tx.send(ClientCommand::PutTab).unwrap();
     }
 
     fn backspace(&mut self) {
-        self.tx.send(Command::Backspace).unwrap();
+        self.tx.send(ClientCommand::Backspace).unwrap();
     }
 
     fn carriage_return(&mut self) {
-        self.tx.send(Command::CarriageReturn).unwrap();
+        self.tx.send(ClientCommand::CarriageReturn).unwrap();
     }
 
     fn linefeed(&mut self) {
-        self.tx.send(Command::LineFeed).unwrap();
+        self.tx.send(ClientCommand::LineFeed).unwrap();
     }
 
     fn bell(&mut self) {
@@ -167,7 +167,7 @@ impl Handler for StateMachine {
     }
 
     fn newline(&mut self) {
-        self.tx.send(Command::NewLine).unwrap();
+        self.tx.send(ClientCommand::NewLine).unwrap();
     }
 
     fn set_horizontal_tabstop(&mut self) {
@@ -187,11 +187,11 @@ impl Handler for StateMachine {
     }
 
     fn delete_lines(&mut self, l: usize) {
-        self.tx.send(Command::DeleteLines(l as i16)).unwrap();
+        self.tx.send(ClientCommand::DeleteLines(l as i16)).unwrap();
     }
 
     fn erase_chars(&mut self, c: usize) {
-        self.tx.send(Command::ClearCount(c as i16)).unwrap();
+        self.tx.send(ClientCommand::ClearCount(c as i16)).unwrap();
     }
 
     fn delete_chars(&mut self, _: usize) {
@@ -207,23 +207,23 @@ impl Handler for StateMachine {
     }
 
     fn save_cursor_position(&mut self) {
-        self.tx.send(Command::SaveCursor).unwrap();
+        self.tx.send(ClientCommand::SaveCursor).unwrap();
     }
 
     fn restore_cursor_position(&mut self) {
-        self.tx.send(Command::RestoreCursor).unwrap();
+        self.tx.send(ClientCommand::RestoreCursor).unwrap();
     }
 
     fn clear_line(&mut self, mode: LineClearMode) {
         match mode {
             LineClearMode::All => {
-                self.tx.send(Command::ClearLine).unwrap();
+                self.tx.send(ClientCommand::ClearLine).unwrap();
             }
             LineClearMode::Left => {
-                self.tx.send(Command::ClearLineBeforeCursor).unwrap();
+                self.tx.send(ClientCommand::ClearLineBeforeCursor).unwrap();
             }
             LineClearMode::Right => {
-                self.tx.send(Command::ClearLineAfterCursor).unwrap();
+                self.tx.send(ClientCommand::ClearLineAfterCursor).unwrap();
             }
         }
     }
@@ -231,13 +231,13 @@ impl Handler for StateMachine {
     fn clear_screen(&mut self, mode: ClearMode) {
         match mode {
             ClearMode::All => {
-                self.tx.send(Command::ClearScreen).unwrap();
+                self.tx.send(ClientCommand::ClearScreen).unwrap();
             }
             ClearMode::Above => {
-                self.tx.send(Command::ClearAbove).unwrap();
+                self.tx.send(ClientCommand::ClearAbove).unwrap();
             }
             ClearMode::Below => {
-                self.tx.send(Command::ClearBelow).unwrap();
+                self.tx.send(ClientCommand::ClearBelow).unwrap();
             }
             ClearMode::Saved => {}
         }
@@ -261,10 +261,10 @@ impl Handler for StateMachine {
 
     fn terminal_attribute(&mut self, attr: Attr) {
         if attr == Attr::Reset {
-            self.tx.send(Command::ResetStyles).unwrap();
+            self.tx.send(ClientCommand::ResetStyles).unwrap();
         } else {
             self.tx
-                .send(Command::SGR(SgrAttribute::from_vte_attr(attr)))
+                .send(ClientCommand::SGR(SgrAttribute::from_vte_attr(attr)))
                 .unwrap();
         }
     }
@@ -284,11 +284,11 @@ impl Handler for StateMachine {
     fn set_private_mode(&mut self, mode: PrivateMode) {
         match mode {
             PrivateMode::Named(NamedPrivateMode::ShowCursor) => {
-                self.tx.send(Command::ShowCursor).unwrap();
+                self.tx.send(ClientCommand::ShowCursor).unwrap();
             }
             PrivateMode::Named(NamedPrivateMode::SwapScreenAndSetRestoreCursor) => {
                 self.tx
-                    .send(Command::SwapScreenAndSetRestoreCursor)
+                    .send(ClientCommand::SwapScreenAndSetRestoreCursor)
                     .unwrap();
             }
             _ => {
@@ -300,11 +300,11 @@ impl Handler for StateMachine {
     fn unset_private_mode(&mut self, mode: PrivateMode) {
         match mode {
             PrivateMode::Named(NamedPrivateMode::ShowCursor) => {
-                self.tx.send(Command::HideCursor).unwrap();
+                self.tx.send(ClientCommand::HideCursor).unwrap();
             }
             PrivateMode::Named(NamedPrivateMode::SwapScreenAndSetRestoreCursor) => {
                 self.tx
-                    .send(Command::SwapScreenAndSetRestoreCursor)
+                    .send(ClientCommand::SwapScreenAndSetRestoreCursor)
                     .unwrap();
             }
             _ => {
@@ -338,7 +338,7 @@ impl Handler for StateMachine {
     }
 
     fn set_color(&mut self, i: usize, rgb: Rgb) {
-        self.tx.send(Command::SetColor(i, rgb)).unwrap();
+        self.tx.send(ClientCommand::SetColor(i, rgb)).unwrap();
     }
 
     fn dynamic_color_sequence(&mut self, _: String, _: usize, _: &str) {
@@ -346,7 +346,7 @@ impl Handler for StateMachine {
     }
 
     fn reset_color(&mut self, i: usize) {
-        self.tx.send(Command::ResetColor(i)).unwrap();
+        self.tx.send(ClientCommand::ResetColor(i)).unwrap();
     }
 
     fn clipboard_store(&mut self, _: u8, _: &[u8]) {

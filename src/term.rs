@@ -16,7 +16,7 @@ use rustix::termios::{self, OptionalActions, Termios};
 use rustix_openpty::openpty;
 use tokio::sync::broadcast::{self, Receiver};
 
-use crate::commands::Command as TermCommand;
+use crate::commands::{ClientCommand as TermCommand, ServerCommand};
 use crate::config::Config;
 use crate::statemachine;
 
@@ -222,13 +222,16 @@ pub fn spawn_read_thread(
 
 pub fn spawn_write_thread(
     write_fd: OwnedFd,
-    mut input_rx: Receiver<Vec<u8>>,
+    mut input_rx: Receiver<ServerCommand>,
     exit_flag: Arc<AtomicBool>,
 ) {
     tokio::spawn(async move {
         loop {
-            if let Some(data) = input_rx.recv().await.ok() {
-                write_to_fd(write_fd.as_fd(), &data);
+            match input_rx.recv().await {
+                Ok(ServerCommand::RawData(data)) => {
+                    write_to_fd(write_fd.as_fd(), &data);
+                }
+                _ => {}
             }
 
             if exit_flag.load(Ordering::Relaxed) {

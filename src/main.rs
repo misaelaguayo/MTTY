@@ -3,10 +3,12 @@ use std::{
     sync::{atomic::AtomicBool, Arc},
 };
 
-use commands::Command;
+use commands::ClientCommand;
 use config::Config;
 use eframe::egui::{self};
 use tokio::sync::broadcast;
+
+use crate::commands::ServerCommand;
 
 pub mod commands;
 pub mod config;
@@ -29,7 +31,7 @@ async fn main() -> Result<(), std::io::Error> {
 
     let (output_tx, output_rx_ui) = broadcast::channel(10000);
 
-    let (input_tx, input_rx): (broadcast::Sender<Vec<u8>>, broadcast::Receiver<Vec<u8>>) =
+    let (input_tx, input_rx): (broadcast::Sender<ServerCommand>, broadcast::Receiver<ServerCommand>) =
         broadcast::channel(10000);
 
     term::spawn_read_thread(read_fd.as_raw_fd(), exit_flag.clone(), output_tx);
@@ -43,8 +45,8 @@ async fn main() -> Result<(), std::io::Error> {
 fn start_ui(
     config: &Config,
     exit_flag: Arc<AtomicBool>,
-    tx: broadcast::Sender<Vec<u8>>,
-    rx_ui: broadcast::Receiver<Command>,
+    tx: broadcast::Sender<ServerCommand>,
+    rx_ui: broadcast::Receiver<ClientCommand>,
 ) {
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
@@ -69,7 +71,7 @@ fn start_ui(
     );
 }
 
-fn redraw(ctx: egui::Context, mut rx: broadcast::Receiver<Command>, exit_flag: Arc<AtomicBool>) {
+fn redraw(ctx: egui::Context, mut rx: broadcast::Receiver<ClientCommand>, exit_flag: Arc<AtomicBool>) {
     loop {
         if exit_flag.load(std::sync::atomic::Ordering::Acquire) {
             break;

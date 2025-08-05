@@ -3,11 +3,11 @@ use std::{
     sync::{atomic::AtomicBool, Arc},
 };
 
-use eframe::egui::{self};
+use eframe::egui::{self, Pos2};
 use tokio::sync::broadcast::{Receiver, Sender};
 
 use crate::{
-    commands::{Command, IdentifyTerminalMode, SgrAttribute},
+    commands::{ClientCommand, IdentifyTerminalMode, ServerCommand, SgrAttribute},
     config::Config,
     grid::{Cell, Grid},
     styles::{Color, Styles},
@@ -19,8 +19,9 @@ mod tests;
 pub struct Ui {
     exit_flag: Arc<AtomicBool>,
     input: String,
-    tx: Sender<Vec<u8>>,
-    rx: Receiver<Command>,
+    tx: Sender<ServerCommand>,
+    rx: Receiver<ClientCommand>,
+    config: Config,
     grid: Grid,
 }
 
@@ -28,8 +29,8 @@ impl Ui {
     pub fn new(
         config: &Config,
         exit_flag: Arc<AtomicBool>,
-        tx: Sender<Vec<u8>>,
-        rx: Receiver<Command>,
+        tx: Sender<ServerCommand>,
+        rx: Receiver<ClientCommand>,
     ) -> Self {
         println!("Grid size: {} x {}", config.rows, config.cols);
         Self {
@@ -37,8 +38,15 @@ impl Ui {
             input: String::new(),
             tx,
             rx,
+            config: config.clone(),
             grid: Grid::new(config),
         }
+    }
+
+    fn send_raw_data(&self, data: Vec<u8>) {
+        self.tx
+            .send(ServerCommand::RawData(data))
+            .expect("Failed to send raw data");
     }
 
     fn handle_sgr_attribute(&mut self, attribute: SgrAttribute) {
@@ -109,54 +117,54 @@ impl Ui {
         }
     }
 
-    fn handle_command(&mut self, command: Command) {
+    fn handle_command(&mut self, command: ClientCommand) {
         let cols = self.grid.width;
         match command {
-            Command::Backspace => {
+            ClientCommand::Backspace => {
                 self.grid.delete_character();
             }
-            Command::Print(c) => {
+            ClientCommand::Print(c) => {
                 self.grid.place_character_in_grid(cols, c);
             }
-            Command::NewLine => {
+            ClientCommand::NewLine => {
                 self.grid.place_character_in_grid(cols, '\n');
             }
-            Command::CarriageReturn => {
+            ClientCommand::CarriageReturn => {
                 self.grid.place_character_in_grid(cols, '\r');
             }
-            Command::LineFeed => {
+            ClientCommand::LineFeed => {
                 self.grid.set_pos(self.grid.cursor_pos.0 + 1, 0);
             }
-            Command::ClearScreen => {
+            ClientCommand::ClearScreen => {
                 self.grid.clear_screen();
             }
-            Command::MoveCursor(x, y) => {
+            ClientCommand::MoveCursor(x, y) => {
                 self.grid.set_pos(x as usize, y as usize);
             }
-            Command::MoveCursorAbsoluteHorizontal(y) => {
+            ClientCommand::MoveCursorAbsoluteHorizontal(y) => {
                 self.grid.set_pos(self.grid.cursor_pos.0, y as usize);
             }
-            Command::MoveCursorHorizontal(y) => {
+            ClientCommand::MoveCursorHorizontal(y) => {
                 let new_y = self.grid.cursor_pos.1 as i16 + y;
                 self.grid.set_pos(self.grid.cursor_pos.0, new_y as usize);
             }
-            Command::MoveCursorVertical(x) => {
+            ClientCommand::MoveCursorVertical(x) => {
                 let new_x = self.grid.cursor_pos.0 as i16 + x;
                 self.grid.set_pos(new_x as usize, self.grid.cursor_pos.1);
             }
-            Command::ClearLineAfterCursor => {
+            ClientCommand::ClearLineAfterCursor => {
                 let (row, col) = self.grid.cursor_pos;
                 self.clear_cells(row, col..self.grid.width as usize);
             }
-            Command::ClearLineBeforeCursor => {
+            ClientCommand::ClearLineBeforeCursor => {
                 let (row, col) = self.grid.cursor_pos;
                 self.clear_cells(row, 0..col);
             }
-            Command::ClearLine => {
+            ClientCommand::ClearLine => {
                 let (row, _) = self.grid.cursor_pos;
                 self.clear_cells(row, 0..self.grid.width as usize);
             }
-            Command::ClearBelow => {
+            ClientCommand::ClearBelow => {
                 // first clear after cursor
                 let (row, col) = self.grid.cursor_pos;
                 self.clear_cells(row, col..self.grid.width as usize);
@@ -166,7 +174,7 @@ impl Ui {
                     self.clear_cells(i, 0..self.grid.width as usize);
                 }
             }
-            Command::ClearAbove => {
+            ClientCommand::ClearAbove => {
                 // first clear before cursor
                 let (row, col) = self.grid.cursor_pos;
                 self.clear_cells(row, 0..col);
@@ -176,16 +184,15 @@ impl Ui {
                     self.clear_cells(i, 0..self.grid.width as usize);
                 }
             }
-            Command::ClearCount(count) => {
+            ClientCommand::ClearCount(count) => {
                 let (row, col) = self.grid.cursor_pos;
                 self.clear_cells(row, col..col + count as usize);
             }
-            Command::SGR(command) => {
+            ClientCommand::SGR(command) => {
                 self.handle_sgr_attribute(command);
             }
-            Command::ReportCursorPosition => {
-                self.tx
-                    .send(
+            ClientCommand::ReportCursorPosition => {
+                self.send_raw_data(
                         format!(
                             "\x1b[{};{}R",
                             self.grid.cursor_pos.0, self.grid.cursor_pos.1
@@ -193,19 +200,18 @@ impl Ui {
                         .as_bytes()
                         .to_vec(),
                     )
-                    .unwrap();
             }
-            Command::ReportCondition(healthy) => {
+            ClientCommand::ReportCondition(healthy) => {
                 if healthy {
-                    self.tx.send(b"\x1b[0n".to_vec()).unwrap();
+                    self.send_raw_data(b"\x1b[0n".to_vec());
                 } else {
-                    self.tx.send(b"\x1b[3n".to_vec()).unwrap();
+                    self.send_raw_data(b"\x1b[3n".to_vec());
                 }
             }
-            Command::ShowCursor => {
+            ClientCommand::ShowCursor => {
                 self.grid.show_cursor();
             }
-            Command::PutTab => {
+            ClientCommand::PutTab => {
                 let (row, col) = self.grid.cursor_pos;
                 if col < self.grid.width as usize - 5 {
                     for i in col..col + 4 {
@@ -218,43 +224,43 @@ impl Ui {
                     }
                 }
             }
-            Command::SaveCursor => {
+            ClientCommand::SaveCursor => {
                 self.grid.save_cursor();
             }
-            Command::RestoreCursor => {
+            ClientCommand::RestoreCursor => {
                 self.grid.restore_cursor();
             }
-            Command::SwapScreenAndSetRestoreCursor => {
+            ClientCommand::SwapScreenAndSetRestoreCursor => {
                 self.grid.saved_cursor_pos = self.grid.cursor_pos;
                 self.grid.swap_active_grid();
             }
-            Command::IdentifyTerminal(mode) => match mode {
+            ClientCommand::IdentifyTerminal(mode) => match mode {
                 IdentifyTerminalMode::Primary => {
-                    self.tx.send(b"\x1b[?6c".to_vec()).unwrap();
+                    self.send_raw_data(b"\x1b[?6c".to_vec());
                 }
                 IdentifyTerminalMode::Secondary => {
                     let version = "0.0.1";
                     let text = format!("\x1b[>0;{version};1c");
-                    self.tx.send(text.as_bytes().to_vec()).unwrap();
+                    self.send_raw_data(text.as_bytes().to_vec());
                 }
             },
-            Command::SetColor(index, color) => {
+            ClientCommand::SetColor(index, color) => {
                 self.grid.styles.color_array[index] = Color::Rgb(color.r, color.g, color.b);
             }
-            Command::ResetColor(index) => {
+            ClientCommand::ResetColor(index) => {
                 self.grid.styles.color_array[index] = Color::default_array()[index];
             }
-            Command::ResetStyles => {
+            ClientCommand::ResetStyles => {
                 self.grid.styles = Styles::default();
             }
-            Command::MoveCursorVerticalWithCarriageReturn(x) => {
+            ClientCommand::MoveCursorVerticalWithCarriageReturn(x) => {
                 let new_x = self.grid.cursor_pos.0 as i16 + x;
                 self.grid.set_pos(new_x as usize, 0);
             }
-            Command::HideCursor => {
+            ClientCommand::HideCursor => {
                 self.grid.hide_cursor();
             }
-            Command::DeleteLines(count) => {
+            ClientCommand::DeleteLines(count) => {
                 let (row, _) = self.grid.cursor_pos;
                 // delete lines at cursor position
 
@@ -262,10 +268,10 @@ impl Ui {
                     self.grid.active_grid().remove(row);
                 }
             }
-            Command::SetCursorState(state) => {
+            ClientCommand::SetCursorState(state) => {
                 self.grid.styles.cursor_state = state;
             }
-            Command::SetCursorShape(shape) => {
+            ClientCommand::SetCursorShape(shape) => {
                 self.grid.styles.cursor_state.shape = shape;
             }
             _ => {
@@ -284,7 +290,27 @@ impl Ui {
         }
     }
 
-    fn handle_event(&mut self, event: &egui::Event) {
+    fn handle_event(&mut self, event: &egui::Event, viewport: Option<egui::Rect>) {
+        if let Some(rect) = viewport {
+            let Pos2 { x: x0, y: y0 } = rect.min;
+            let Pos2 { x: x1, y: y1 } = rect.max;
+
+            let new_width = (x1 - x0) as usize;
+            let new_height = (y1 - y0) as usize;
+
+            if new_width != self.config.width as usize
+                || new_height != self.config.height as usize
+            {
+                println!(
+                    "Viewport changed: new width = {}, new height = {}",
+                    new_width, new_height
+                );
+
+                self.config.width = new_width as f32;
+                self.config.height = new_height as f32;
+            }
+        }
+
         match event {
             egui::Event::Key {
                 key,
@@ -295,29 +321,29 @@ impl Ui {
             } => {
                 match key {
                     egui::Key::Backspace => {
-                        self.tx.send(vec![8]).unwrap();
+                        self.send_raw_data(vec![8]);
                     }
                     egui::Key::Escape => {
                         self.grid.pretty_print();
-                        self.tx.send(vec![27]).unwrap();
+                        self.send_raw_data(vec![27]);
                     }
                     egui::Key::ArrowUp => {
-                        self.tx.send(vec![27, 91, 65]).unwrap();
+                        self.send_raw_data(vec![27, 91, 65]);
                     }
                     egui::Key::ArrowDown => {
-                        self.tx.send(vec![27, 91, 66]).unwrap();
+                        self.send_raw_data(vec![27, 91, 66]);
                     }
                     egui::Key::ArrowLeft => {
-                        self.tx.send(vec![27, 91, 68]).unwrap();
+                        self.send_raw_data(vec![27, 91, 68]);
                     }
                     egui::Key::ArrowRight => {
-                        self.tx.send(vec![27, 91, 67]).unwrap();
+                        self.send_raw_data(vec![27, 91, 67]);
                     }
                     egui::Key::Enter => {
-                        self.tx.send(vec![13]).unwrap();
+                        self.send_raw_data(vec![13]);
                     }
                     egui::Key::Tab => {
-                        self.tx.send(vec![9]).unwrap();
+                        self.send_raw_data(vec![9]);
                     }
                     _ => {}
                 }
@@ -325,19 +351,19 @@ impl Ui {
                 match modifiers {
                     egui::Modifiers { ctrl: true, .. } => match key.name() {
                         "C" => {
-                            self.tx.send(vec![3]).unwrap();
+                            self.send_raw_data(vec![3]);
                         }
                         "D" => {
-                            self.tx.send(vec![4]).unwrap();
+                            self.send_raw_data(vec![4]);
                         }
                         "L" => {
-                            self.tx.send(vec![12]).unwrap();
+                            self.send_raw_data(vec![12]);
                         }
                         "U" => {
-                            self.tx.send(vec![21]).unwrap();
+                            self.send_raw_data(vec![21]);
                         }
                         "W" => {
-                            self.tx.send(vec![23]).unwrap();
+                            self.send_raw_data(vec![23]);
                         }
                         _ => {}
                     },
@@ -373,7 +399,7 @@ impl eframe::App for Ui {
         }
 
         if !self.input.is_empty() {
-            let _ = self.tx.send(self.input.as_bytes().to_vec());
+            self.send_raw_data(self.input.as_bytes().to_vec());
 
             self.input.clear();
         }
@@ -387,7 +413,7 @@ impl eframe::App for Ui {
         egui::CentralPanel::default().frame(frame).show(ctx, |ui| {
             ui.input(|i| {
                 i.raw.events.iter().for_each(|event| {
-                    self.handle_event(event);
+                    self.handle_event(event, i.viewport().inner_rect);
                 });
             });
 
