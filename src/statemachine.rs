@@ -42,7 +42,7 @@ impl Handler for StateMachine {
                     .send(Command::SetCursorState(CursorState::new(shape, blinking)))
                     .unwrap();
             }
-            None => {}
+            _ => {}
         }
     }
 
@@ -92,11 +92,6 @@ impl Handler for StateMachine {
 
     fn identify_terminal(&mut self, intermediate: Option<char>) {
         match intermediate {
-            None => {
-                self.tx
-                    .send(Command::IdentifyTerminal(IdentifyTerminalMode::Primary))
-                    .unwrap();
-            }
             Some('>') => {
                 self.tx
                     .send(Command::IdentifyTerminal(IdentifyTerminalMode::Secondary))

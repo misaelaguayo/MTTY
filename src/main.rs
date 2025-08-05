@@ -21,7 +21,6 @@ pub mod ui;
 async fn main() -> Result<(), std::io::Error> {
     let config = config::Config::default();
 
-    // Flag set when ui is closed and signals background threads to exit
     let exit_flag = Arc::new(AtomicBool::new(false));
 
     let term = term::Term::new(&config)?;
