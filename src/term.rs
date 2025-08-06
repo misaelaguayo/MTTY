@@ -58,9 +58,9 @@ pub fn write_to_fd(fd: BorrowedFd, data: &[u8]) {
 
     match write_result {
         Ok(size) => {
-            println!("Wrote {} bytes", size);
+            log::info!("Wrote {} bytes", size);
         }
-        Err(e) => eprintln!("Failed to write to file: {:?}", e),
+        Err(e) => log::error!("Failed to write to fd: {}", e),
     }
 }
 
@@ -200,9 +200,12 @@ fn enable_raw_mode(termios: &mut Termios) {
 }
 
 pub fn resize_terminal(fd: BorrowedFd, cols: u16, rows: u16, width: u16, height: u16) {
-    println!(
+    log::info!(
         "Resizing terminal to {} cols, {} rows, {} width, {} height",
-        cols, rows, width, height
+        cols,
+        rows,
+        width,
+        height
     );
     let winsize = termios::Winsize {
         ws_row: rows - 1,

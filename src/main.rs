@@ -21,6 +21,7 @@ pub mod ui;
 
 #[tokio::main]
 async fn main() -> Result<(), std::io::Error> {
+    env_logger::init();
     let config = config::Config::default();
 
     let exit_flag = Arc::new(AtomicBool::new(false));

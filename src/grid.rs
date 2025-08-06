@@ -102,17 +102,18 @@ impl Grid {
     }
 
     pub fn pretty_print(&mut self) {
-        println!("Grid: {}x{}", self.width, self.height);
-        println!("Cursor Position: {:?}", self.cursor_pos);
-        println!("Saved Cursor Position: {:?}", self.saved_cursor_pos);
-        println!("Scroll Position: {:?}", self.scroll_pos);
-        println!(
+        log::info!("Grid: {}x{}", self.width, self.height);
+        log::info!("Cursor Position: {:?}", self.cursor_pos);
+        log::info!("Saved Cursor Position: {:?}", self.saved_cursor_pos);
+        log::info!("Scroll Position: {:?}", self.scroll_pos);
+        log::info!(
             "Active Grid: {:?}",
             if self.alternate { "Alternate" } else { "Main" }
         );
-        println!(
+        log::info!(
             "Colors: Bg: {:?}, Fg: {:?}",
-            self.styles.active_background_color, self.styles.active_text_color
+            self.styles.active_background_color,
+            self.styles.active_text_color
         );
 
         for row in self.active_grid() {

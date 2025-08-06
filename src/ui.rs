@@ -32,7 +32,7 @@ impl Ui {
         tx: Sender<ServerCommand>,
         rx: Receiver<ClientCommand>,
     ) -> Self {
-        println!("Grid size: {} x {}", config.rows, config.cols);
+        log::info!("Grid size: {} x {}", config.rows, config.cols);
         Self {
             exit_flag,
             input: String::new(),
@@ -273,7 +273,7 @@ impl Ui {
                 self.grid.styles.cursor_state.shape = shape;
             }
             _ => {
-                println!("Unsupported command: {:?}", command);
+                log::info!("Unsupported command: {:?}", command);
             }
         }
     }
@@ -298,9 +298,10 @@ impl Ui {
 
             if new_width != self.config.width as usize || new_height != self.config.height as usize
             {
-                println!(
+                log::info!(
                     "Viewport changed: new width = {}, new height = {}",
-                    new_width, new_height
+                    new_width,
+                    new_height
                 );
 
                 self.config.width = new_width as f32;

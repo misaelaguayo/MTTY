@@ -43,7 +43,7 @@ NIX_CC='/nix/store/1g645wydyvns7dy8gy27dq0n3rbkd712-clang-wrapper-19.1.7'
 export NIX_CC
 NIX_CC_WRAPPER_TARGET_HOST_arm64_apple_darwin='1'
 export NIX_CC_WRAPPER_TARGET_HOST_arm64_apple_darwin
-NIX_CFLAGS_COMPILE=' -frandom-seed=vj0005gaw1 -isystem /nix/store/h3ciy33gp08hqxrcmzlhyvc5cnbykj4z-libcxx-19.1.7-dev/include -isystem /nix/store/dfw51rycwq21b1q70wsq1b3iq9i0nqvs-compiler-rt-libc-19.1.7-dev/include -isystem /nix/store/6sshh5ajg1wxsvqyk2xmz0pcl4ygy0jj-libiconv-109-dev/include -isystem /nix/store/0dyiwmgrw78iaq982j4hz9ww5yapn959-libresolv-83-dev/include -isystem /nix/store/j23g27yrl45xvpp9rkkmyg1zm94nvb4m-libsbuf-14.1.0-dev/include -isystem /nix/store/jw3cb6lf59jiaxgrzai80pifyxafr130-cups-headers-2.4.11/include -isystem /nix/store/h3ciy33gp08hqxrcmzlhyvc5cnbykj4z-libcxx-19.1.7-dev/include -isystem /nix/store/dfw51rycwq21b1q70wsq1b3iq9i0nqvs-compiler-rt-libc-19.1.7-dev/include -isystem /nix/store/6sshh5ajg1wxsvqyk2xmz0pcl4ygy0jj-libiconv-109-dev/include -isystem /nix/store/0dyiwmgrw78iaq982j4hz9ww5yapn959-libresolv-83-dev/include -isystem /nix/store/j23g27yrl45xvpp9rkkmyg1zm94nvb4m-libsbuf-14.1.0-dev/include -isystem /nix/store/jw3cb6lf59jiaxgrzai80pifyxafr130-cups-headers-2.4.11/include'
+NIX_CFLAGS_COMPILE=' -frandom-seed=f9b5jvvba2 -isystem /nix/store/h3ciy33gp08hqxrcmzlhyvc5cnbykj4z-libcxx-19.1.7-dev/include -isystem /nix/store/dfw51rycwq21b1q70wsq1b3iq9i0nqvs-compiler-rt-libc-19.1.7-dev/include -isystem /nix/store/6sshh5ajg1wxsvqyk2xmz0pcl4ygy0jj-libiconv-109-dev/include -isystem /nix/store/0dyiwmgrw78iaq982j4hz9ww5yapn959-libresolv-83-dev/include -isystem /nix/store/j23g27yrl45xvpp9rkkmyg1zm94nvb4m-libsbuf-14.1.0-dev/include -isystem /nix/store/jw3cb6lf59jiaxgrzai80pifyxafr130-cups-headers-2.4.11/include -isystem /nix/store/h3ciy33gp08hqxrcmzlhyvc5cnbykj4z-libcxx-19.1.7-dev/include -isystem /nix/store/dfw51rycwq21b1q70wsq1b3iq9i0nqvs-compiler-rt-libc-19.1.7-dev/include -isystem /nix/store/6sshh5ajg1wxsvqyk2xmz0pcl4ygy0jj-libiconv-109-dev/include -isystem /nix/store/0dyiwmgrw78iaq982j4hz9ww5yapn959-libresolv-83-dev/include -isystem /nix/store/j23g27yrl45xvpp9rkkmyg1zm94nvb4m-libsbuf-14.1.0-dev/include -isystem /nix/store/jw3cb6lf59jiaxgrzai80pifyxafr130-cups-headers-2.4.11/include'
 export NIX_CFLAGS_COMPILE
 NIX_DONT_SET_RPATH='1'
 export NIX_DONT_SET_RPATH
@@ -204,7 +204,8 @@ export propagatedNativeBuildInputs
 declare -a propagatedTargetDepFiles=('propagated-target-target-deps' )
 shell='/nix/store/nravshvfviv75plf26nwfwzg8ldl3z8s-bash-5.2p37/bin/bash'
 export shell
-shellHook=''
+shellHook='export RUST_LOG='\''INFO'\'';
+'
 export shellHook
 stdenv='/nix/store/rc2ghg881pd2j4np3jq8plk7vdavx1xh-stdenv-darwin'
 export stdenv

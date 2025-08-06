@@ -6,5 +6,9 @@ nixpkgs.mkShell {
     rustc
     nixpkgs-fmt
   ];
+
+  shellHook = ''
+    export RUST_LOG='INFO';
+  '';
 }
 
