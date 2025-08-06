@@ -25,3 +25,11 @@ impl Default for Config {
         }
     }
 }
+
+impl Config {
+    pub fn get_col_rows_from_size(&self, width: f32, height: f32) -> (u16, u16) {
+        let cols = (width / self.font_size).floor() as u16;
+        let rows = (height / self.font_size).floor() as u16;
+        (cols, rows)
+    }
+}

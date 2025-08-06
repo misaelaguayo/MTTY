@@ -199,6 +199,28 @@ fn enable_raw_mode(termios: &mut Termios) {
     termios.control_modes.remove(termios::ControlModes::CS8);
 }
 
+pub fn resize_terminal(fd: BorrowedFd, cols: u16, rows: u16, width: u16, height: u16) {
+    println!(
+        "Resizing terminal to {} cols, {} rows, {} width, {} height",
+        cols, rows, width, height
+    );
+    let winsize = termios::Winsize {
+        ws_row: rows - 1,
+        ws_col: cols - 1,
+        ws_xpixel: width,
+        ws_ypixel: height,
+    };
+
+    let res = unsafe {
+        #[allow(clippy::cast_lossless)]
+        libc::ioctl(fd.as_raw_fd(), libc::TIOCSWINSZ, &winsize)
+    };
+
+    if res < 0 {
+        panic!("Failed to resize terminal: {}", Error::last_os_error());
+    }
+}
+
 pub fn spawn_read_thread(
     fd: i32,
     read_exit_flag: Arc<AtomicBool>,
@@ -230,6 +252,9 @@ pub fn spawn_write_thread(
             match input_rx.recv().await {
                 Ok(ServerCommand::RawData(data)) => {
                     write_to_fd(write_fd.as_fd(), &data);
+                }
+                Ok(ServerCommand::Resize(cols, rows, width, height)) => {
+                    resize_terminal(write_fd.as_fd(), cols, rows, width, height);
                 }
                 _ => {}
             }

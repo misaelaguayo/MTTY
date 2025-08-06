@@ -191,16 +191,14 @@ impl Ui {
             ClientCommand::SGR(command) => {
                 self.handle_sgr_attribute(command);
             }
-            ClientCommand::ReportCursorPosition => {
-                self.send_raw_data(
-                        format!(
-                            "\x1b[{};{}R",
-                            self.grid.cursor_pos.0, self.grid.cursor_pos.1
-                        )
-                        .as_bytes()
-                        .to_vec(),
-                    )
-            }
+            ClientCommand::ReportCursorPosition => self.send_raw_data(
+                format!(
+                    "\x1b[{};{}R",
+                    self.grid.cursor_pos.0, self.grid.cursor_pos.1
+                )
+                .as_bytes()
+                .to_vec(),
+            ),
             ClientCommand::ReportCondition(healthy) => {
                 if healthy {
                     self.send_raw_data(b"\x1b[0n".to_vec());
@@ -298,8 +296,7 @@ impl Ui {
             let new_width = (x1 - x0) as usize;
             let new_height = (y1 - y0) as usize;
 
-            if new_width != self.config.width as usize
-                || new_height != self.config.height as usize
+            if new_width != self.config.width as usize || new_height != self.config.height as usize
             {
                 println!(
                     "Viewport changed: new width = {}, new height = {}",
@@ -308,6 +305,19 @@ impl Ui {
 
                 self.config.width = new_width as f32;
                 self.config.height = new_height as f32;
+
+                let (new_cols, new_rows) = self
+                    .config
+                    .get_col_rows_from_size(self.config.width, self.config.height);
+
+                self.tx
+                    .send(ServerCommand::Resize(
+                        new_cols,
+                        new_rows,
+                        new_width as u16,
+                        new_height as u16,
+                    ))
+                    .expect("Failed to send resize command");
             }
         }
 

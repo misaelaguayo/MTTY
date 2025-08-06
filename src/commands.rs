@@ -77,7 +77,7 @@ impl SgrAttribute {
 
 #[derive(Debug, Clone)]
 pub enum ServerCommand {
-    Resize(u16, u16),
+    Resize(u16, u16, u16, u16),
     RawData(Vec<u8>),
 }
 

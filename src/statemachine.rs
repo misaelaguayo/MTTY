@@ -39,7 +39,9 @@ impl Handler for StateMachine {
                 };
 
                 self.tx
-                    .send(ClientCommand::SetCursorState(CursorState::new(shape, blinking)))
+                    .send(ClientCommand::SetCursorState(CursorState::new(
+                        shape, blinking,
+                    )))
                     .unwrap();
             }
             _ => {}
@@ -55,7 +57,9 @@ impl Handler for StateMachine {
             VteCursorShape::Hidden => CursorShape::Hidden,
         };
 
-        self.tx.send(ClientCommand::SetCursorShape(cursor_shape)).unwrap();
+        self.tx
+            .send(ClientCommand::SetCursorShape(cursor_shape))
+            .unwrap();
     }
 
     fn input(&mut self, c: char) {
@@ -69,11 +73,15 @@ impl Handler for StateMachine {
     }
 
     fn goto_line(&mut self, line: i32) {
-        self.tx.send(ClientCommand::MoveCursor(line as i16, 0)).unwrap();
+        self.tx
+            .send(ClientCommand::MoveCursor(line as i16, 0))
+            .unwrap();
     }
 
     fn goto_col(&mut self, col: usize) {
-        self.tx.send(ClientCommand::MoveCursor(0, col as i16)).unwrap();
+        self.tx
+            .send(ClientCommand::MoveCursor(0, col as i16))
+            .unwrap();
     }
 
     fn insert_blank(&mut self, count: usize) {
@@ -87,14 +95,18 @@ impl Handler for StateMachine {
     }
 
     fn move_down(&mut self, d: usize) {
-        self.tx.send(ClientCommand::MoveCursorVertical(d as i16)).unwrap();
+        self.tx
+            .send(ClientCommand::MoveCursorVertical(d as i16))
+            .unwrap();
     }
 
     fn identify_terminal(&mut self, intermediate: Option<char>) {
         match intermediate {
             Some('>') => {
                 self.tx
-                    .send(ClientCommand::IdentifyTerminal(IdentifyTerminalMode::Secondary))
+                    .send(ClientCommand::IdentifyTerminal(
+                        IdentifyTerminalMode::Secondary,
+                    ))
                     .unwrap();
             }
             _ => {

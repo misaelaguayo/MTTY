@@ -5,7 +5,6 @@ use crate::{
 };
 use std::fmt;
 
-
 #[cfg(test)]
 mod tests;
 

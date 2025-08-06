@@ -31,8 +31,10 @@ async fn main() -> Result<(), std::io::Error> {
 
     let (output_tx, output_rx_ui) = broadcast::channel(10000);
 
-    let (input_tx, input_rx): (broadcast::Sender<ServerCommand>, broadcast::Receiver<ServerCommand>) =
-        broadcast::channel(10000);
+    let (input_tx, input_rx): (
+        broadcast::Sender<ServerCommand>,
+        broadcast::Receiver<ServerCommand>,
+    ) = broadcast::channel(10000);
 
     term::spawn_read_thread(read_fd.as_raw_fd(), exit_flag.clone(), output_tx);
     term::spawn_write_thread(write_fd, input_rx, exit_flag.clone());
@@ -71,7 +73,11 @@ fn start_ui(
     );
 }
 
-fn redraw(ctx: egui::Context, mut rx: broadcast::Receiver<ClientCommand>, exit_flag: Arc<AtomicBool>) {
+fn redraw(
+    ctx: egui::Context,
+    mut rx: broadcast::Receiver<ClientCommand>,
+    exit_flag: Arc<AtomicBool>,
+) {
     loop {
         if exit_flag.load(std::sync::atomic::Ordering::Acquire) {
             break;
