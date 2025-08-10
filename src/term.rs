@@ -16,7 +16,8 @@ use rustix::termios::{self, OptionalActions, Termios};
 use rustix_openpty::openpty;
 use tokio::sync::broadcast::{self, Receiver};
 
-use crate::commands::{ClientCommand as TermCommand, ServerCommand};
+use crate::app::{ClientChannel, ServerChannel};
+use crate::commands::{ClientCommand, ServerCommand};
 use crate::config::Config;
 use crate::statemachine;
 
@@ -96,6 +97,71 @@ impl Term {
         let (master, slave) = (pty.controller, pty.user);
 
         Self::from_fd(master, slave)
+    }
+
+    pub fn init(
+        &self,
+        is_running: Arc<AtomicBool>,
+        client_channel: &ClientChannel,
+        server_channel: &ServerChannel,
+    ) {
+        let fd = self.parent.try_clone().expect("Failed to clone parent fd");
+        Self::spawn_read_thread(
+            fd.as_raw_fd(),
+            is_running.clone(),
+            client_channel.output_transmitter.clone(),
+        );
+
+        Self::spawn_write_thread(
+            fd,
+            server_channel.input_receiver.resubscribe(),
+            is_running.clone(),
+        );
+    }
+
+    fn spawn_read_thread(
+        fd: i32,
+        read_exit_flag: Arc<AtomicBool>,
+        output_tx: broadcast::Sender<ClientCommand>,
+    ) {
+        tokio::spawn(async move {
+            let mut processor: Processor = Processor::new();
+            let mut statemachine = statemachine::StateMachine::new(output_tx);
+
+            loop {
+                if let Some(data) = read_from_raw_fd(fd) {
+                    processor.advance(&mut statemachine, &data);
+                }
+
+                if read_exit_flag.load(Ordering::Relaxed) {
+                    break;
+                }
+            }
+        });
+    }
+
+    fn spawn_write_thread(
+        write_fd: OwnedFd,
+        mut input_rx: Receiver<ServerCommand>,
+        exit_flag: Arc<AtomicBool>,
+    ) {
+        tokio::spawn(async move {
+            loop {
+                match input_rx.recv().await {
+                    Ok(ServerCommand::RawData(data)) => {
+                        write_to_fd(write_fd.as_fd(), &data);
+                    }
+                    Ok(ServerCommand::Resize(cols, rows, width, height)) => {
+                        resize_terminal(write_fd.as_fd(), cols, rows, width, height);
+                    }
+                    _ => {}
+                }
+
+                if exit_flag.load(Ordering::Relaxed) {
+                    break;
+                }
+            }
+        });
     }
 
     fn from_fd(master: OwnedFd, slave: OwnedFd) -> Result<Term, Error> {
@@ -222,51 +288,6 @@ pub fn resize_terminal(fd: BorrowedFd, cols: u16, rows: u16, width: u16, height:
     if res < 0 {
         panic!("Failed to resize terminal: {}", Error::last_os_error());
     }
-}
-
-pub fn spawn_read_thread(
-    fd: i32,
-    read_exit_flag: Arc<AtomicBool>,
-    output_tx: broadcast::Sender<TermCommand>,
-) {
-    tokio::spawn(async move {
-        let mut processor: Processor = Processor::new();
-        let mut statemachine = statemachine::StateMachine::new(output_tx);
-
-        loop {
-            if let Some(data) = read_from_raw_fd(fd) {
-                processor.advance(&mut statemachine, &data);
-            }
-
-            if read_exit_flag.load(Ordering::Relaxed) {
-                break;
-            }
-        }
-    });
-}
-
-pub fn spawn_write_thread(
-    write_fd: OwnedFd,
-    mut input_rx: Receiver<ServerCommand>,
-    exit_flag: Arc<AtomicBool>,
-) {
-    tokio::spawn(async move {
-        loop {
-            match input_rx.recv().await {
-                Ok(ServerCommand::RawData(data)) => {
-                    write_to_fd(write_fd.as_fd(), &data);
-                }
-                Ok(ServerCommand::Resize(cols, rows, width, height)) => {
-                    resize_terminal(write_fd.as_fd(), cols, rows, width, height);
-                }
-                _ => {}
-            }
-
-            if exit_flag.load(Ordering::Relaxed) {
-                break;
-            }
-        }
-    });
 }
 
 unsafe fn set_nonblocking(fd: c_int) {

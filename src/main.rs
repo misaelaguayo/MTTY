@@ -10,6 +10,7 @@ use tokio::sync::broadcast;
 
 use crate::commands::ServerCommand;
 
+pub mod app;
 pub mod commands;
 pub mod config;
 pub mod fonts;
@@ -22,25 +23,15 @@ pub mod ui;
 #[tokio::main]
 async fn main() -> Result<(), std::io::Error> {
     env_logger::init();
-    let config = config::Config::default();
 
-    let exit_flag = Arc::new(AtomicBool::new(false));
+    let app = app::App::new(Config::default(), Arc::new(AtomicBool::new(false)));
 
-    let term = term::Term::new(&config)?;
-    let read_fd = term.parent.try_clone()?;
-    let write_fd = term.parent.try_clone()?;
-
-    let (output_tx, output_rx_ui) = broadcast::channel(10000);
-
-    let (input_tx, input_rx): (
-        broadcast::Sender<ServerCommand>,
-        broadcast::Receiver<ServerCommand>,
-    ) = broadcast::channel(10000);
-
-    term::spawn_read_thread(read_fd.as_raw_fd(), exit_flag.clone(), output_tx);
-    term::spawn_write_thread(write_fd, input_rx, exit_flag.clone());
-
-    start_ui(&config, exit_flag, input_tx, output_rx_ui);
+    start_ui(
+        &app.config,
+        app.is_running,
+        app.server_channel.input_transmitter.clone(),
+        app.client_channel.output_receiver.resubscribe(),
+    );
 
     Ok(())
 }
