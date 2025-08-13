@@ -8,7 +8,7 @@ nixpkgs.mkShell {
   ];
 
   shellHook = ''
-    export RUST_LOG='INFO';
+    export RUST_LOG='MTTY=INFO';
   '';
 }
 
