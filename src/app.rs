@@ -1,7 +1,6 @@
 use crate::commands::{ClientCommand, ServerCommand};
 use crate::config::Config;
-use crate::term::{self, Term};
-use std::os::fd::AsRawFd;
+use crate::term::Term;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use tokio::sync::broadcast;
