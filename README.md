@@ -6,6 +6,17 @@ Simple terminal written in rust
 
 <img width="641" alt="Screenshot 2025-04-23 at 2 29 51 PM" src="https://github.com/user-attachments/assets/f16bba0f-9a37-45f4-be57-8684d4b201fe" />
 
+# Testing
+To run the tests, use the following command:
+```bash
+cargo test
+```
+
+## Coverage
+To run the coverage report, use the following command:
+```bash
+cargo tarpaulin --out Html
+```
 
 
 Missing Features
