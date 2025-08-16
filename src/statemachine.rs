@@ -23,7 +23,7 @@ impl StateMachine {
 
 impl Handler for StateMachine {
     fn set_title(&mut self, _: Option<String>) {
-        log::debug!("Set title");
+        log::error!("Set title");
     }
 
     fn set_cursor_style(&mut self, s: Option<CursorStyle>) {
@@ -91,7 +91,7 @@ impl Handler for StateMachine {
     }
 
     fn insert_blank(&mut self, count: usize) {
-        log::debug!("Insert blank: {}", count);
+        log::error!("Insert blank: {}", count);
     }
 
     fn move_up(&mut self, u: usize) {
@@ -119,7 +119,7 @@ impl Handler for StateMachine {
                     .unwrap();
             }
             _ => {
-                log::debug!("Unknown intermediate: {:?}", intermediate);
+                log::error!("Unknown intermediate: {:?}", intermediate);
             }
         }
         log::debug!("Identify terminal");
@@ -135,7 +135,7 @@ impl Handler for StateMachine {
                 self.tx.send(ClientCommand::ReportCursorPosition).unwrap();
             }
             _ => {
-                log::debug!("Unknown device status: {}", arg);
+                log::error!("Unknown device status: {}", arg);
             }
         }
     }
@@ -189,11 +189,11 @@ impl Handler for StateMachine {
     }
 
     fn bell(&mut self) {
-        log::debug!("Bell");
+        log::error!("Bell");
     }
 
     fn substitute(&mut self) {
-        log::debug!("Substitute");
+        log::error!("Substitute");
     }
 
     fn newline(&mut self) {
@@ -202,19 +202,19 @@ impl Handler for StateMachine {
     }
 
     fn set_horizontal_tabstop(&mut self) {
-        log::debug!("Set horizontal tabstop");
+        log::error!("Set horizontal tabstop");
     }
 
     fn scroll_up(&mut self, _: usize) {
-        log::debug!("Scroll up");
+        log::error!("Scroll up");
     }
 
     fn scroll_down(&mut self, _: usize) {
-        log::debug!("Scroll down");
+        log::error!("Scroll down");
     }
 
     fn insert_blank_lines(&mut self, _: usize) {
-        log::debug!("Insert blank lines");
+        log::error!("Insert blank lines");
     }
 
     fn delete_lines(&mut self, l: usize) {
@@ -228,15 +228,15 @@ impl Handler for StateMachine {
     }
 
     fn delete_chars(&mut self, _: usize) {
-        log::debug!("Delete chars");
+        log::error!("Delete chars");
     }
 
     fn move_backward_tabs(&mut self, _count: u16) {
-        log::debug!("Move backward tabs");
+        log::error!("Move backward tabs");
     }
 
     fn move_forward_tabs(&mut self, _count: u16) {
-        log::debug!("Move forward tabs");
+        log::error!("Move forward tabs");
     }
 
     fn save_cursor_position(&mut self) {
@@ -281,19 +281,19 @@ impl Handler for StateMachine {
     }
 
     fn clear_tabs(&mut self, _mode: TabulationClearMode) {
-        log::debug!("Clear tabs");
+        log::error!("Clear tabs");
     }
 
     fn set_tabs(&mut self, _interval: u16) {
-        log::debug!("Set tabs");
+        log::error!("Set tabs");
     }
 
     fn reset_state(&mut self) {
-        log::debug!("Reset state");
+        log::error!("Reset state");
     }
 
     fn reverse_index(&mut self) {
-        log::debug!("Reverse index");
+        log::error!("Reverse index");
     }
 
     fn terminal_attribute(&mut self, attr: Attr) {
@@ -308,15 +308,15 @@ impl Handler for StateMachine {
     }
 
     fn set_mode(&mut self, _mode: Mode) {
-        log::debug!("Set mode");
+        log::error!("Set mode");
     }
 
     fn unset_mode(&mut self, _mode: Mode) {
-        log::debug!("Unset mode");
+        log::error!("Unset mode");
     }
 
     fn report_mode(&mut self, _mode: Mode) {
-        log::debug!("Report mode");
+        log::error!("Report mode");
     }
 
     fn set_private_mode(&mut self, mode: PrivateMode) {
@@ -331,7 +331,7 @@ impl Handler for StateMachine {
                     .unwrap();
             }
             _ => {
-                log::debug!("Set private mode: {:?}", mode);
+                log::error!("Set private mode: {:?}", mode);
             }
         }
     }
@@ -348,33 +348,33 @@ impl Handler for StateMachine {
                     .unwrap();
             }
             _ => {
-                log::debug!("Unset private mode: {:?}", mode);
+                log::error!("Unset private mode: {:?}", mode);
             }
         }
     }
 
     fn report_private_mode(&mut self, _mode: PrivateMode) {
-        log::debug!("Report private mode");
+        log::error!("Report private mode");
     }
 
     fn set_scrolling_region(&mut self, top: usize, bottom: Option<usize>) {
-        log::debug!("Set scrolling region: {} {:?}", top, bottom);
+        log::error!("Set scrolling region: {} {:?}", top, bottom);
     }
 
     fn set_keypad_application_mode(&mut self) {
-        log::debug!("Set keypad application mode");
+        log::error!("Set keypad application mode");
     }
 
     fn unset_keypad_application_mode(&mut self) {
-        log::debug!("Unset keypad application mode");
+        log::error!("Unset keypad application mode");
     }
 
     fn set_active_charset(&mut self, _: CharsetIndex) {
-        log::debug!("Set active charset");
+        log::error!("Set active charset");
     }
 
     fn configure_charset(&mut self, c: CharsetIndex, typ: StandardCharset) {
-        log::debug!("Configure charset: {:?} {:?}", c, typ);
+        log::error!("Configure charset: {:?} {:?}", c, typ);
     }
 
     fn set_color(&mut self, i: usize, rgb: Rgb) {
@@ -383,7 +383,7 @@ impl Handler for StateMachine {
     }
 
     fn dynamic_color_sequence(&mut self, _: String, _: usize, _: &str) {
-        log::debug!("Dynamic color sequence");
+        log::error!("Dynamic color sequence");
     }
 
     fn reset_color(&mut self, i: usize) {
@@ -392,66 +392,66 @@ impl Handler for StateMachine {
     }
 
     fn clipboard_store(&mut self, _: u8, _: &[u8]) {
-        log::debug!("Clipboard store");
+        log::error!("Clipboard store");
     }
 
     fn clipboard_load(&mut self, _: u8, _: &str) {
-        log::debug!("Clipboard load");
+        log::error!("Clipboard load");
     }
 
     fn decaln(&mut self) {
-        log::debug!("DECALN");
+        log::error!("DECALN");
     }
 
     fn push_title(&mut self) {
-        log::debug!("Push title");
+        log::error!("Push title");
     }
 
     fn pop_title(&mut self) {
-        log::debug!("Pop title");
+        log::error!("Pop title");
     }
 
     fn text_area_size_pixels(&mut self) {
-        log::debug!("Text area size pixels");
+        log::error!("Text area size pixels");
     }
 
     fn text_area_size_chars(&mut self) {
-        log::debug!("Text area size chars");
+        log::error!("Text area size chars");
     }
 
     fn set_hyperlink(&mut self, _: Option<Hyperlink>) {
-        log::debug!("Set hyperlink");
+        log::error!("Set hyperlink");
     }
 
     fn set_mouse_cursor_icon(&mut self, _: cursor_icon::CursorIcon) {
-        log::debug!("Set mouse cursor icon");
+        log::error!("Set mouse cursor icon");
     }
 
     fn report_keyboard_mode(&mut self) {
-        log::debug!("Report keyboard mode");
+        log::error!("Report keyboard mode");
     }
 
     fn push_keyboard_mode(&mut self, _mode: KeyboardModes) {
-        log::debug!("Push keyboard mode");
+        log::error!("Push keyboard mode");
     }
 
     fn pop_keyboard_modes(&mut self, _to_pop: u16) {
-        log::debug!("Pop keyboard modes");
+        log::error!("Pop keyboard modes");
     }
 
     fn set_keyboard_mode(&mut self, _mode: KeyboardModes, _behavior: KeyboardModesApplyBehavior) {
-        log::debug!("Set keyboard mode");
+        log::error!("Set keyboard mode");
     }
 
     fn set_modify_other_keys(&mut self, _mode: ModifyOtherKeys) {
-        log::debug!("Set modify other keys");
+        log::error!("Set modify other keys");
     }
 
     fn report_modify_other_keys(&mut self) {
-        log::debug!("Report modify other keys");
+        log::error!("Report modify other keys");
     }
 
     fn set_scp(&mut self, _char_path: ScpCharPath, _update_mode: ScpUpdateMode) {
-        log::debug!("Set SCP");
+        log::error!("Set SCP");
     }
 }
