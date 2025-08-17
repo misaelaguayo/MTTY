@@ -5,3 +5,6 @@ examples/**/target
 *.profraw
 *.html
 .direnv/
+.idea/
+*.swo
+*.swp
