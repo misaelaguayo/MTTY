@@ -4,3 +4,4 @@ completions-jj.nu
 examples/**/target
 *.profraw
 *.html
+.direnv/
