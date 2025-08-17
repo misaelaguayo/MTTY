@@ -2,3 +2,4 @@
 /fonts
 completions-jj.nu
 examples/**/target
+*.profraw
