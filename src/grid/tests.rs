@@ -13,6 +13,22 @@ fn set_pos_should_set_cursor_position() {
 }
 
 #[test]
+fn set_pos_should_add_rows_and_set_scroll_pos_if_needed() {
+    let config = Config {
+        rows: 10,
+        cols: 10,
+        ..Config::default()
+    };
+    let mut grid = Grid::new(&config);
+
+    grid.set_pos(15, 5);
+
+    assert_eq!(grid.cursor_pos, (15, 5));
+    assert_eq!(grid.active_grid().len(), 16);
+    assert_eq!(grid.scroll_pos, 15);
+}
+
+#[test]
 fn delete_character_should_remove_character_in_row() {
     let mut grid = Grid::new(&Config::default());
 
@@ -92,6 +108,36 @@ fn clear_screen_should_clear_grid() {
     grid.clear_screen();
     assert!(grid
         .cells
+        .iter()
+        .all(|row| row.iter().all(|cell| cell.char == ' ')));
+}
+
+#[test]
+fn swap_active_grid_should_swap_grids() {
+    let config = Config {
+        rows: 10,
+        cols: 10,
+        ..Config::default()
+    };
+    let mut grid = Grid::new(&config);
+
+    // Fill the active grid with some data
+    for row in 0..5 {
+        for col in 0..5 {
+            grid.cells[row][col] = Cell::new('x', Color::White, Color::Black);
+        }
+    }
+
+    // Swap to inactive grid
+    grid.swap_active_grid();
+
+    let active_grid = grid.active_grid();
+
+    // grid should be same size as before
+    assert_eq!(active_grid.len(), config.rows as usize);
+
+    // each cell in the active grid should be empty
+    assert!(active_grid
         .iter()
         .all(|row| row.iter().all(|cell| cell.char == ' ')));
 }

@@ -86,19 +86,6 @@ impl Grid {
 
     pub fn swap_active_grid(&mut self) {
         self.alternate = !self.alternate;
-        if !self.alternate {
-            self.alternate_screen = vec![
-                vec![
-                    Cell::new(
-                        ' ',
-                        self.styles.active_text_color,
-                        self.styles.active_background_color
-                    );
-                    self.width as usize
-                ];
-                self.height as usize
-            ];
-        }
     }
 
     pub fn pretty_print(&mut self) {
@@ -131,6 +118,11 @@ impl Grid {
     pub fn set_pos(&mut self, row: usize, col: usize) {
         let rows = self.active_grid().len();
         if row >= rows {
+            log::warn!(
+                "Row {} exceeds grid height {}. Adjusting to last row.",
+                row,
+                rows - 1
+            );
             self.add_rows(row - rows + 1);
             self.scroll_pos = row;
         }
