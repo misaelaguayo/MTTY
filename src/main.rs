@@ -3,6 +3,7 @@ use std::sync::{atomic::AtomicBool, Arc};
 use commands::ClientCommand;
 use config::Config;
 use eframe::egui::{self};
+use std::io::Write;
 use tokio::sync::broadcast;
 
 use crate::{commands::ServerCommand, ui::Ui};
@@ -19,7 +20,18 @@ pub mod ui;
 
 #[tokio::main]
 async fn main() -> Result<(), std::io::Error> {
-    env_logger::init();
+    env_logger::Builder::from_default_env()
+        .format(|buf, record| {
+            writeln!(
+                buf,
+                "{}:{} - [{}] {}",
+                record.file().unwrap_or("unknown"),
+                record.line().unwrap_or(0),
+                record.level(),
+                record.args()
+            )
+        })
+        .init();
 
     let app = app::App::new(Config::default(), Arc::new(AtomicBool::new(false)));
 
