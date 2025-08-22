@@ -65,7 +65,7 @@ impl Handler for StateMachine {
     }
 
     fn input(&mut self, c: char) {
-        log::debug!("Input character: {}", c);
+        log::trace!("Input character: {}", c);
         self.tx.send(ClientCommand::Print(c)).unwrap();
     }
 
@@ -276,7 +276,10 @@ impl Handler for StateMachine {
             ClearMode::Below => {
                 self.tx.send(ClientCommand::ClearBelow).unwrap();
             }
-            ClearMode::Saved => {}
+            ClearMode::Saved => {
+                // Should also delete lines saved in the scrollback buffer
+                self.tx.send(ClientCommand::ClearScreen).unwrap();
+            }
         }
     }
 
@@ -298,13 +301,9 @@ impl Handler for StateMachine {
 
     fn terminal_attribute(&mut self, attr: Attr) {
         log::debug!("Terminal attribute: {:?}", attr);
-        if attr == Attr::Reset {
-            self.tx.send(ClientCommand::ResetStyles).unwrap();
-        } else {
-            self.tx
-                .send(ClientCommand::SGR(SgrAttribute::from_vte_attr(attr)))
-                .unwrap();
-        }
+        self.tx
+            .send(ClientCommand::SGR(SgrAttribute::from_vte_attr(attr)))
+            .unwrap();
     }
 
     fn set_mode(&mut self, _mode: Mode) {

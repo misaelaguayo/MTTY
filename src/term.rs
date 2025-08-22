@@ -59,7 +59,7 @@ pub fn write_to_fd(fd: BorrowedFd, data: &[u8]) {
 
     match write_result {
         Ok(size) => {
-            log::info!("Wrote {} bytes", size);
+            log::trace!("Wrote {} bytes", size);
         }
         Err(e) => log::error!("Failed to write to fd: {}", e),
     }

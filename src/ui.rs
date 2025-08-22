@@ -248,9 +248,6 @@ impl Ui {
             ClientCommand::ResetColor(index) => {
                 self.grid.styles.color_array[index] = Color::default_array()[index];
             }
-            ClientCommand::ResetStyles => {
-                self.grid.styles = Styles::default();
-            }
             ClientCommand::MoveCursorVerticalWithCarriageReturn(x) => {
                 let new_x = self.grid.cursor_pos.0 as i16 + x;
                 self.grid.set_pos(new_x as usize, 0);
@@ -405,14 +402,22 @@ impl Ui {
 
 impl eframe::App for Ui {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        while let Ok(data) = self.rx.try_recv() {
-            self.handle_command(data);
+        // Process commands for a limited time to avoid blocking the UI
+        let now = std::time::Instant::now();
+        while now.elapsed().as_millis() < 50 {
+            match self.rx.try_recv() {
+                Ok(command) => {
+                    self.handle_command(command);
+                }
+                Err(_) => {
+                    break; // No more commands to process
+                }
+            }
         }
 
-        if !self.input.is_empty() {
-            self.send_raw_data(self.input.as_bytes().to_vec());
-
-            self.input.clear();
+        while self.input.len() > 0 {
+            let c = self.input.remove(0);
+            self.send_raw_data(vec![c as u8]);
         }
 
         let frame = egui::Frame {
@@ -438,8 +443,8 @@ impl eframe::App for Ui {
                     let start_row = self
                         .grid
                         .scroll_pos
-                        .saturating_sub(self.grid.height as usize - 1);
-                    let end_row = self.grid.active_grid().len();
+                        .saturating_sub(self.grid.height as usize);
+                    let end_row = self.grid.active_grid().len() - 1;
 
                     for i in start_row..end_row as usize {
                         for j in 0..self.grid.width as usize {

@@ -110,7 +110,6 @@ pub enum ClientCommand {
     ReportCondition(bool),
     ReportCursorPosition,
     ResetColor(usize),
-    ResetStyles,
     RestoreCursor,
     SGR(SgrAttribute),
     SaveCursor,
