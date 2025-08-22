@@ -444,7 +444,7 @@ impl eframe::App for Ui {
                         .grid
                         .scroll_pos
                         .saturating_sub(self.grid.height as usize);
-                    let end_row = self.grid.active_grid().len() - 1;
+                    let end_row = self.grid.active_grid().len();
 
                     for i in start_row..end_row as usize {
                         for j in 0..self.grid.width as usize {
