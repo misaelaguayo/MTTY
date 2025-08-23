@@ -14,6 +14,7 @@ nixpkgs.mkShell {
 
   shellHook = ''
     export RUST_LOG='MTTY=INFO';
+    export TERM=ansi
   '';
 }
 

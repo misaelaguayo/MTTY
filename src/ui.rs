@@ -246,7 +246,7 @@ impl Ui {
                 self.grid.styles.color_array[index] = Color::Rgb(color.r, color.g, color.b);
             }
             ClientCommand::ResetColor(index) => {
-                self.grid.styles.color_array[index] = Color::default_array()[index];
+                self.grid.styles.color_array[index] = Color::DEFAULT_ARRAY[index];
             }
             ClientCommand::MoveCursorVerticalWithCarriageReturn(x) => {
                 let new_x = self.grid.cursor_pos.0 as i16 + x;
