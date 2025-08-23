@@ -10,6 +10,7 @@ nixpkgs.mkShell {
     nixpkgs-fmt
     llvm
     cargo-tarpaulin
+    cargo-bundle
   ];
 }
 

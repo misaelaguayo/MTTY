@@ -13,3 +13,8 @@ rustix = { version = "1.0.2", features = ["termios"] }
 rustix-openpty = "0.2.0"
 tokio = { version = "1.44.1", features = ["full", "sync"] }
 vte = { version = "0.15.0", default-features = false, features = ["std", "ansi"] }
+
+[package.metadata.bundle]
+name = "MTTY"
+identifier = "com.misaelaguayo.mtty"
+icon = ["assets/Icon.icns"]

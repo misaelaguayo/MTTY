@@ -8,3 +8,4 @@ examples/**/target
 .idea/
 *.swo
 *.swp
+.DS_Store
