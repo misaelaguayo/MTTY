@@ -1,0 +1,4 @@
+[env]
+RUST_LOG = { value = "MTTY=INFO", force = true }
+TERM = { value = "ansi", force = true }
+

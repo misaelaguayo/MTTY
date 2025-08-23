@@ -11,10 +11,5 @@ nixpkgs.mkShell {
     llvm
     cargo-tarpaulin
   ];
-
-  shellHook = ''
-    export RUST_LOG='MTTY=INFO';
-    export TERM=ansi
-  '';
 }
 
