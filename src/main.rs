@@ -2,7 +2,7 @@ use std::sync::{atomic::AtomicBool, Arc};
 
 use commands::ClientCommand;
 use config::Config;
-use eframe::egui::{self};
+use eframe::egui::{self, IconData};
 use std::io::Write;
 use tokio::sync::broadcast;
 
@@ -53,6 +53,7 @@ fn start_ui(
 ) {
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
+            .with_icon(IconData::default())
             .with_inner_size([config.width, config.height]),
         ..Default::default()
     };
