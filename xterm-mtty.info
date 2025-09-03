@@ -1,0 +1,4 @@
+xterm-mtty|mtty|MTTY,
+	am,
+	cols#80,
+	bel=^G, cr=\r, cud1=\n, ind=\n,

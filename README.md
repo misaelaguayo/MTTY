@@ -18,6 +18,15 @@ To run the coverage report, use the following command:
 cargo tarpaulin --out Html
 ```
 
+## Terminfo
+
+MTTY uses a custom terminfo file to allow custom features.
+The terminfo file is located in the `xterm-mtty.info` file.
+To generate the terminfo file, use the following command:
+
+```bash
+tic -x xterm-mtty.info
+```
 
 Missing Features
 - [ ] Allow terminal resizing
