@@ -1,9 +1,15 @@
 xterm-mtty|mtty|MTTY,
+# Characters will wrap
 	am,
+# Screen erased with background color
+    bce,
+    ccc,
+# Cols is used as a fallback. The actual width is determined by the terminal.
 	cols#80,
 	bel=^G,
     cr=\r,
     cud1=\n,
     ind=\n,
     clear=\E[H\E[2J,
+# Move cursor
     cup=\E[%i%p1%d;%p2%dH,
