@@ -69,6 +69,17 @@ fn delete_character_should_wrap_to_previous_line_if_pos_at_beginning() {
 fn place_character_in_grid_should_place_character_in_grid() {
     let mut grid = Grid::new(&Config::default());
 
+    grid.set_pos(5, 9);
+    grid.place_character_in_grid(10, 'a');
+
+    assert_eq!(grid.cursor_pos, (5, 10));
+    assert_eq!(grid.cells[5][9].char, 'a');
+}
+
+#[test]
+fn place_character_in_grid_should_wrap_to_next_row_if_column_specified_larger_than_grid() {
+    let mut grid = Grid::new(&Config::default());
+
     grid.set_pos(5, 10);
     grid.place_character_in_grid(10, 'a');
 
