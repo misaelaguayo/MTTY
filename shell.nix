@@ -17,8 +17,4 @@ pkgs.mkShellNoCC {
     export LLVM_PROFILE_FILE="cargo-test-%p-%m.profraw"
     export BIN_PATH="${pkgs.lib.makeBinPath bin}"
   '';
-
-  # generating coverage reports
-  # cargo test
-  # grcov . --binary-path ./target/debug/deps/ -s . -t html --branch --ignore-not-existing --ignore '../*' --ignore "/*" -o target/coverage/html --llvm-path=$BIN_PATH
 }
