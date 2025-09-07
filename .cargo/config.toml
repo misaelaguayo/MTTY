@@ -1,3 +1,3 @@
 [env]
 RUST_LOG = { value = "MTTY=INFO", force = true }
-TERM = { value = "xterm-mtty", force = true }
+TERM = { value = "xterm-ghostty", force = true }

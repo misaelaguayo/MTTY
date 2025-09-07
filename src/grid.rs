@@ -144,7 +144,7 @@ impl Grid {
     pub fn place_character_in_grid(&mut self, cols: u16, c: char) {
         let (mut row, mut col) = self.cursor_pos;
 
-        if col >= cols as usize - 1 {
+        if col >= cols as usize {
             self.set_pos(row + 1, 0);
         }
 
