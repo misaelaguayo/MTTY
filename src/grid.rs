@@ -170,6 +170,10 @@ impl Grid {
         let fg = self.styles.active_text_color;
         let bg = self.styles.active_background_color;
 
+        // Clear out any rows which may have been added
+        let rows = self.height as usize;
+        self.active_grid().truncate(rows);
+
         for row in self.active_grid() {
             for cell in row {
                 *cell = Cell::new(' ', fg, bg);
@@ -177,6 +181,7 @@ impl Grid {
         }
 
         self.scroll_pos = 0;
+        self.cursor_pos = (0, 0);
     }
 
     pub fn delete_character(&mut self) {
