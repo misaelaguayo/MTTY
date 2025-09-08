@@ -4,11 +4,12 @@ use std::{
 };
 
 use eframe::egui::{self, Pos2};
-use tokio::sync::broadcast::{Receiver, Sender};
+use tokio::sync::broadcast::{self, Receiver, Sender};
 
 use crate::{
     commands::{ClientCommand, IdentifyTerminalMode, ServerCommand, SgrAttribute},
     config::Config,
+    fonts,
     grid::{Cell, Grid},
     styles::{Color, Styles},
 };
@@ -16,7 +17,55 @@ use crate::{
 #[cfg(test)]
 mod tests;
 
-pub struct Ui {
+// Trait defining a runner that can execute the UI
+// This allows for different implementations of the UI e.g. Egui, Iced, etc.
+pub trait Runner {
+    fn run(self);
+}
+
+pub struct EguiRunner {
+    pub exit_flag: Arc<AtomicBool>,
+    pub config: Config,
+    pub tx: Sender<ServerCommand>,
+    pub rx: Receiver<ClientCommand>,
+}
+
+impl Runner for EguiRunner {
+    fn run(self) {
+        let options = eframe::NativeOptions {
+            viewport: eframe::egui::ViewportBuilder::default()
+                .with_icon(eframe::egui::IconData::default())
+                .with_inner_size([self.config.width, self.config.height]),
+            ..Default::default()
+        };
+
+        let egui_ui = EguiApp::new(
+            &self.config,
+            self.exit_flag.clone(),
+            self.tx.clone(),
+            self.rx.resubscribe(),
+        );
+
+        eframe::run_native(
+            "MTTY",
+            options,
+            Box::new(|cc| {
+                let ctx = cc.egui_ctx.clone();
+                fonts::configure_text_styles(&ctx, &self.config);
+                tokio::spawn(async move {
+                    redraw(ctx, self.rx, self.exit_flag);
+                });
+
+                Ok(Box::new(egui_ui))
+            }),
+        )
+        .unwrap_or_else(|e| {
+            log::error!("Failed to start egui UI: {}", e);
+        });
+    }
+}
+
+pub struct EguiApp {
     exit_flag: Arc<AtomicBool>,
     input: String,
     tx: Sender<ServerCommand>,
@@ -25,7 +74,7 @@ pub struct Ui {
     grid: Grid,
 }
 
-impl Ui {
+impl EguiApp {
     pub fn new(
         config: &Config,
         exit_flag: Arc<AtomicBool>,
@@ -400,7 +449,7 @@ impl Ui {
     }
 }
 
-impl eframe::App for Ui {
+impl eframe::App for EguiApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Process commands for a limited time to avoid blocking the UI
         let now = std::time::Instant::now();
@@ -472,5 +521,20 @@ impl eframe::App for Ui {
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         self.exit_flag
             .store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+fn redraw(
+    ctx: egui::Context,
+    mut rx: broadcast::Receiver<ClientCommand>,
+    exit_flag: Arc<AtomicBool>,
+) {
+    loop {
+        if exit_flag.load(std::sync::atomic::Ordering::Acquire) {
+            break;
+        }
+        while let Ok(_) = rx.try_recv() {
+            ctx.request_repaint();
+        }
     }
 }
