@@ -224,6 +224,13 @@ impl Term {
         }
     }
 
+    #[cfg(target_os = "linux")]
+    fn default_shell_command() -> Command {
+        let shell = env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
+
+        Command::new(shell)
+    }
+
     #[cfg(target_os = "macos")]
     fn default_shell_command() -> Command {
         let shell = env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());

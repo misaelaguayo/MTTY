@@ -2,6 +2,14 @@
 
 let
   llvmPath = nixpkgs.lib.makeBinPath [ nixpkgs.llvm ];
+  libx11Path = nixpkgs.lib.makeLibraryPath [
+    nixpkgs.libGL
+    nixpkgs.libxkbcommon
+    nixpkgs.libx11
+    nixpkgs.libxcursor
+    nixpkgs.xorg.libXi
+    nixpkgs.libxrandr
+  ];
 in
 nixpkgs.mkShell {
   buildInputs = with nixpkgs; [
@@ -12,5 +20,9 @@ nixpkgs.mkShell {
     cargo-tarpaulin
     cargo-bundle
   ];
+
+  shellHook = ''
+    export LD_LIBRARY_PATH=${if nixpkgs.stdenv.isLinux then libx11Path else ""}:$LD_LIBRARY_PATH
+  '';
 }
 
