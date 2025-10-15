@@ -10,6 +10,11 @@ let
     nixpkgs.xorg.libXi
     nixpkgs.libxrandr
   ];
+  waylandPath = nixpkgs.lib.makeLibraryPath [
+    nixpkgs.libGL
+    nixpkgs.libxkbcommon
+    nixpkgs.wayland
+  ];
 in
 nixpkgs.mkShell {
   buildInputs = with nixpkgs; [
@@ -19,10 +24,12 @@ nixpkgs.mkShell {
     llvm
     cargo-tarpaulin
     cargo-bundle
+    rust-analyzer
   ];
 
   shellHook = ''
-    export LD_LIBRARY_PATH=${if nixpkgs.stdenv.isLinux then libx11Path else ""}:$LD_LIBRARY_PATH
+    export LD_LIBRARY_PATH=${if nixpkgs.stdenv.isLinux then waylandPath else ""}:$LD_LIBRARY_PATH
+    export SHELL=nu
   '';
 }
 
