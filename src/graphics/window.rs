@@ -1,11 +1,11 @@
-use crate::{
-    config::Config,
-    grid::Grid,
-};
+use crate::{config::Config, grid::Grid};
 use font_kit::source::SystemSource;
 use std::sync::Arc;
 use wgpu_text::{
-    glyph_brush::{ab_glyph::FontVec, Section, Text},
+    glyph_brush::{
+        ab_glyph::{FontVec, PxScale},
+        Section, Text,
+    },
     BrushBuilder, TextBrush,
 };
 use winit::{
@@ -112,15 +112,37 @@ impl State {
     }
 
     fn render(&mut self) {
-        let section = Section {
-            screen_position: (100.0, 30.0),
-            ..Section::default()
+        let start_row = self
+            .grid
+            .scroll_pos
+            .saturating_sub(self.grid.height as usize);
+        let end_row = self.grid.active_grid().len();
+
+        let mut sections: Vec<Section> = Vec::new();
+
+        for i in start_row..end_row as usize {
+            for j in 0..self.grid.width as usize {
+                let cell = self.grid.active_grid()[i][j].clone();
+                let (y, x) = self.grid.get_cell_pos(i as u16, j as u16);
+
+                let cell_string = Box::leak(cell.char.to_string().into_boxed_str());
+                let text = Text::new(cell_string)
+                    .with_scale(PxScale {
+                        x: self.config.font_size,
+                        y: self.config.font_size,
+                    })
+                    .with_color([1.0, 1.0, 0.0, 1.0]);
+
+                let section = Section {
+                    screen_position: (x as f32, y as f32),
+                    ..Section::default()
+                }
+                .add_text(text);
+
+                sections.push(section);
+            }
         }
-        .add_text(
-            Text::new("Hello, wgpu_text!")
-                .with_scale(40.0)
-                .with_color([1.0, 1.0, 0.0, 1.0]),
-        );
+
         let surface_texture = self
             .surface
             .get_current_texture()
@@ -150,7 +172,7 @@ impl State {
         });
 
         self.brush
-            .queue(&self.device, &self.queue, [&section])
+            .queue(&self.device, &self.queue, sections)
             .unwrap();
         self.brush.draw(&mut renderpass);
 
@@ -182,9 +204,9 @@ impl ApplicationHandler for App {
                 .create_window(
                     Window::default_attributes()
                         .with_title("MTTY")
-                        .with_inner_size(Size::Logical(winit::dpi::LogicalSize {
-                            width: self.config.width as f64,
-                            height: self.config.height as f64,
+                        .with_inner_size(Size::Physical(winit::dpi::PhysicalSize {
+                            width: self.config.width as u32,
+                            height: self.config.height as u32,
                         })),
                 )
                 .unwrap(),

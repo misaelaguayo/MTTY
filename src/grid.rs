@@ -20,7 +20,7 @@ pub struct Cell {
 impl Default for Cell {
     fn default() -> Self {
         Self {
-            char: ' ',
+            char: 'A',
             fg: Color::White,
             bg: Color::Black,
             attrs: vec![SgrAttribute::default()],
@@ -77,6 +77,13 @@ impl Grid {
             alternate: false,
             config,
         }
+    }
+
+    pub fn get_cell_pos(&self, row: u16, col: u16) -> (u16, u16) {
+        (
+            row * self.config.font_size as u16,
+            col * self.config.font_size as u16,
+        )
     }
 
     pub fn resize(&mut self) {

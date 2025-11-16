@@ -9,12 +9,12 @@ pub struct Config {
 
 impl Default for Config {
     fn default() -> Self {
-        const WIDTH: f32 = 640.0;
-        const HEIGHT: f32 = 480.0;
-        const FONT_SIZE: f32 = 12.0;
+        const WIDTH: f32 = 1280.0;
+        const HEIGHT: f32 = 960.0;
+        const FONT_SIZE: f32 = 16.0;
 
-        let rows = 35;
-        let cols = 106;
+        let rows = (HEIGHT / FONT_SIZE).floor() as u16;
+        let cols = (WIDTH / FONT_SIZE).floor() as u16;
 
         Self {
             width: WIDTH,

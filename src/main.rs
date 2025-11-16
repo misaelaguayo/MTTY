@@ -4,7 +4,6 @@ use std::io::Write;
 use std::sync::{atomic::AtomicBool, Arc};
 use tokio::sync::broadcast::{Receiver, Sender};
 
-use crate::grid::Grid;
 use crate::{
     commands::ServerCommand,
     ui::{EguiRunner, Runner},
