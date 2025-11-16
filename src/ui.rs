@@ -88,7 +88,7 @@ impl EguiApp {
             tx,
             rx,
             config: config.clone(),
-            grid: Grid::new(config),
+            grid: Grid::new(Arc::new(config.clone())),
         }
     }
 

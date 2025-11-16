@@ -4,6 +4,7 @@ use crate::{
     styles::{Color, Styles},
 };
 use std::fmt;
+use std::sync::Arc;
 
 #[cfg(test)]
 mod tests;
@@ -48,6 +49,7 @@ pub struct Grid {
     cells: Vec<Vec<Cell>>,
     alternate_screen: Vec<Vec<Cell>>,
     alternate: bool,
+    config: Arc<Config>,
     pub width: u16,
     pub height: u16,
     pub cursor_pos: (usize, usize),
@@ -57,7 +59,7 @@ pub struct Grid {
 }
 
 impl Grid {
-    pub fn new(config: &Config) -> Self {
+    pub fn new(config: Arc<Config>) -> Self {
         let width = config.cols;
         let height = config.rows;
         let cells = vec![vec![Cell::default(); width as usize]; height as usize];
@@ -73,6 +75,23 @@ impl Grid {
             scroll_pos: height as usize - 1,
             styles: Styles::default(),
             alternate: false,
+            config,
+        }
+    }
+
+    pub fn resize(&mut self) {
+        let cols = self.config.cols as usize;
+        let rows = self.config.rows as usize;
+
+        self.width = self.config.cols;
+        self.height = self.config.rows;
+
+        for grid in [&mut self.cells, &mut self.alternate_screen] {
+            grid.resize_with(rows, || vec![Cell::default(); cols]);
+
+            for row in grid.iter_mut() {
+                row.resize_with(cols, || Cell::default());
+            }
         }
     }
 

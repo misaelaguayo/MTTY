@@ -4,14 +4,20 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+bytemuck = "1.24.0"
 eframe = "0.30.0"
 env_logger = "0.11.8"
+font-kit = "0.14.3"
 log = "0.4.27"
 nix = { version = "0.29.0", features = ["term", "process", "fs", "poll"] }
+pollster = "0.4.0"
 rustix = { version = "1.0.2", features = ["termios"] }
 rustix-openpty = "0.2.0"
 tokio = { version = "1.44.1", features = ["full", "sync"] }
 vte = { version = "0.15.0", default-features = false, features = ["std", "ansi"] }
+wgpu = "27.0.1"
+wgpu_text = "27.0.1"
+winit = "0.30.12"
 
 [package.metadata.bundle]
 name = "MTTY"
