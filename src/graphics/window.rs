@@ -1,11 +1,9 @@
 use crate::{
     config::Config,
-    graphics::lib::{Vertex, VERTICES},
     grid::Grid,
 };
 use font_kit::source::SystemSource;
 use std::sync::Arc;
-use wgpu::util::DeviceExt;
 use wgpu_text::{
     glyph_brush::{ab_glyph::FontVec, Section, Text},
     BrushBuilder, TextBrush,
@@ -27,9 +25,6 @@ struct State {
     size: winit::dpi::PhysicalSize<u32>,
     surface: wgpu::Surface<'static>,
     surface_format: wgpu::TextureFormat,
-    render_pipeline: wgpu::RenderPipeline,
-    vertex_buffer: wgpu::Buffer,
-    num_vertices: u32,
     brush: TextBrush<FontVec>,
 }
 
@@ -45,17 +40,6 @@ impl State {
             .request_device(&wgpu::DeviceDescriptor::default())
             .await
             .unwrap();
-
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
-        });
-
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: None,
-            bind_group_layouts: &[],
-            push_constant_ranges: &[],
-        });
 
         let surface = instance.create_surface(window.clone()).unwrap();
 
@@ -78,52 +62,6 @@ impl State {
             surface_format,
         );
 
-        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: None,
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                buffers: &[Vertex::desc()],
-                compilation_options: Default::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                compilation_options: Default::default(),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: surface_format.add_srgb_suffix(),
-                    blend: Some(wgpu::BlendState::REPLACE),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: Some(wgpu::Face::Back),
-                polygon_mode: wgpu::PolygonMode::Fill,
-                unclipped_depth: false,
-                conservative: false,
-            },
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState {
-                count: 1,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
-            multiview: None,
-            cache: None,
-        });
-
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(VERTICES),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-
-        let num_vertices = VERTICES.len() as u32;
-
         let state = State {
             config: config.clone(),
             window,
@@ -132,9 +70,6 @@ impl State {
             size,
             surface,
             surface_format,
-            render_pipeline,
-            vertex_buffer,
-            num_vertices,
             brush,
             grid: Grid::new(config.clone()),
         };
@@ -205,12 +140,7 @@ impl State {
                 depth_slice: None,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.1,
-                        g: 0.2,
-                        b: 0.3,
-                        a: 1.0,
-                    }),
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                     store: wgpu::StoreOp::Store,
                 },
             })],
@@ -219,9 +149,6 @@ impl State {
             occlusion_query_set: None,
         });
 
-        renderpass.set_pipeline(&self.render_pipeline);
-        renderpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-        renderpass.draw(0..self.num_vertices, 0..1);
         self.brush
             .queue(&self.device, &self.queue, [&section])
             .unwrap();
