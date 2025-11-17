@@ -320,6 +320,29 @@ impl Color {
             VteColor::Indexed(i) => Color::ColorIndex(i),
         }
     }
+
+    pub fn to_wgpu_color(&mut self) -> [f32; 4] {
+        match self {
+            Color::Black => [0.0, 0.0, 0.0, 1.0],
+            Color::Red => [1.0, 0.0, 0.0, 1.0],
+            Color::Green => [0.0, 1.0, 0.0, 1.0],
+            Color::Yellow => [1.0, 1.0, 0.0, 1.0],
+            Color::Blue => [0.0, 0.0, 1.0, 1.0],
+            Color::Magenta => [1.0, 0.0, 1.0, 1.0],
+            Color::Cyan => [0.0, 1.0, 1.0, 1.0],
+            Color::White => [1.0, 1.0, 1.0, 1.0],
+            Color::Gray => [0.5, 0.5, 0.5, 1.0],
+            Color::BrightRed => [1.0, 0.5, 0.5, 1.0],
+            Color::BrightGreen => [0.5, 1.0, 0.5, 1.0],
+            Color::BrightYellow => [1.0, 1.0, 0.5, 1.0],
+            Color::BrightBlue => [0.5, 0.5, 1.0, 1.0],
+            Color::BrightMagenta => [1.0, 0.5, 1.0, 1.0],
+            Color::BrightCyan => [0.5, 1.0, 1.0, 1.0],
+            Color::BrightWhite => [1.0, 1.0, 1.0, 1.0],
+            Color::Rgb(r, g, b) => [*r as f32 / 255.0, *g as f32 / 255.0, *b as f32 / 255.0, 1.0],
+            _ => [1.0, 1.0, 1.0, 1.0],
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

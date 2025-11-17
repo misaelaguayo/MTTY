@@ -1,6 +1,7 @@
 use crate::{config::Config, grid::Grid};
 use font_kit::source::SystemSource;
 use std::sync::Arc;
+use std::sync::RwLock;
 use wgpu_text::{
     glyph_brush::{
         ab_glyph::{FontVec, PxScale},
@@ -18,7 +19,7 @@ use winit::{
 
 struct State {
     grid: Grid,
-    config: Arc<Config>,
+    config: Arc<RwLock<Config>>,
     window: Arc<Window>,
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -29,7 +30,7 @@ struct State {
 }
 
 impl State {
-    async fn new(window: Arc<Window>, config: Arc<Config>) -> State {
+    async fn new(window: Arc<Window>, config: Arc<RwLock<Config>>) -> State {
         let size = window.inner_size();
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
         let adapter = instance
@@ -63,7 +64,7 @@ impl State {
         );
 
         let state = State {
-            config: config.clone(),
+            config: Arc::clone(&config),
             window,
             device,
             queue,
@@ -71,7 +72,7 @@ impl State {
             surface,
             surface_format,
             brush,
-            grid: Grid::new(config.clone()),
+            grid: Grid::new(Arc::clone(&config)),
         };
 
         state.configure_surface();
@@ -84,13 +85,14 @@ impl State {
     }
 
     fn configure_surface(&self) {
+        let config = self.config.read().unwrap();
         let surface_config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: self.surface_format,
             view_formats: vec![self.surface_format.add_srgb_suffix()],
             alpha_mode: wgpu::CompositeAlphaMode::Auto,
-            width: self.config.width as u32,
-            height: self.config.height as u32,
+            width: config.width as u32,
+            height: config.height as u32,
             desired_maximum_frame_latency: 2,
             present_mode: wgpu::PresentMode::AutoVsync,
         };
@@ -102,16 +104,22 @@ impl State {
         self.brush
             .resize_view(new_size.width as f32, new_size.height as f32, &self.queue);
         self.configure_surface();
-        self.config = Arc::new(Config {
-            width: new_size.width as f32,
-            height: new_size.height as f32,
-            ..(*self.config).clone()
-        });
 
-        self.grid.resize()
+        self.config.write().unwrap().width = new_size.width as f32;
+        self.config.write().unwrap().height = new_size.height as f32;
+
+        log::info!(
+            "Window resized to: {}x{}",
+            self.config.read().unwrap().width,
+            self.config.read().unwrap().height
+        );
+
+        self.grid
+            .resize(new_size.width as u16, new_size.height as u16);
     }
 
     fn render(&mut self) {
+        let config = self.config.read().unwrap();
         let start_row = self
             .grid
             .scroll_pos
@@ -122,16 +130,16 @@ impl State {
 
         for i in start_row..end_row as usize {
             for j in 0..self.grid.width as usize {
-                let cell = self.grid.active_grid()[i][j].clone();
+                let mut cell = self.grid.active_grid()[i][j].clone();
                 let (y, x) = self.grid.get_cell_pos(i as u16, j as u16);
 
                 let cell_string = Box::leak(cell.char.to_string().into_boxed_str());
                 let text = Text::new(cell_string)
                     .with_scale(PxScale {
-                        x: self.config.font_size,
-                        y: self.config.font_size,
+                        x: config.font_size,
+                        y: config.font_size,
                     })
-                    .with_color([1.0, 1.0, 0.0, 1.0]);
+                    .with_color(cell.fg.to_wgpu_color());
 
                 let section = Section {
                     screen_position: (x as f32, y as f32),
@@ -184,12 +192,12 @@ impl State {
 }
 
 struct App {
-    config: Arc<Config>,
+    config: Arc<RwLock<Config>>,
     state: Option<State>,
 }
 
 impl App {
-    fn new(config: Arc<Config>) -> Self {
+    fn new(config: Arc<RwLock<Config>>) -> Self {
         Self {
             config,
             state: None,
@@ -199,19 +207,20 @@ impl App {
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &event_loop::ActiveEventLoop) {
+        let config = self.config.read().unwrap();
         let window = Arc::new(
             event_loop
                 .create_window(
                     Window::default_attributes()
                         .with_title("MTTY")
                         .with_inner_size(Size::Physical(winit::dpi::PhysicalSize {
-                            width: self.config.width as u32,
-                            height: self.config.height as u32,
+                            width: config.width as u32,
+                            height: config.height as u32,
                         })),
                 )
                 .unwrap(),
         );
-        let state = pollster::block_on(State::new(window.clone(), self.config.clone()));
+        let state = pollster::block_on(State::new(window.clone(), Arc::clone(&self.config)));
         self.state = Some(state);
 
         window.request_redraw();
@@ -240,7 +249,7 @@ impl ApplicationHandler for App {
     }
 }
 
-pub fn display_grid(config: Arc<Config>) -> Result<(), Box<dyn std::error::Error>> {
+pub fn display_grid(config: Arc<RwLock<Config>>) -> Result<(), Box<dyn std::error::Error>> {
     let event_loop = EventLoop::with_user_event().build()?;
     event_loop.set_control_flow(ControlFlow::Poll);
 

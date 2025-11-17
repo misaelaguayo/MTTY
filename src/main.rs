@@ -1,13 +1,10 @@
-use commands::ClientCommand;
 use config::Config;
 use std::io::Write;
+use std::sync::RwLock;
 use std::sync::{atomic::AtomicBool, Arc};
 use tokio::sync::broadcast::{Receiver, Sender};
 
-use crate::{
-    commands::ServerCommand,
-    ui::{EguiRunner, Runner},
-};
+use crate::commands::ServerCommand;
 
 pub mod app;
 pub mod commands;
@@ -18,7 +15,6 @@ pub mod grid;
 pub mod statemachine;
 pub mod styles;
 pub mod term;
-pub mod ui;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -35,8 +31,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .init();
 
-    let config = Arc::new(Config::default());
-    graphics::window::display_grid(config)?;
+    let config = Config::default();
+    let shared_config = Arc::new(RwLock::new(config));
+
+    graphics::window::display_grid(shared_config)?;
 
     // let app = app::App::new(Config::default(), Arc::new(AtomicBool::new(false)));
     //
@@ -50,18 +48,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn start_ui(
-    config: &Config,
-    exit_flag: &Arc<AtomicBool>,
-    tx: &Sender<ServerCommand>,
-    ui_update_receiver: &Receiver<ClientCommand>,
-) {
-    let runner = EguiRunner {
-        exit_flag: exit_flag.clone(),
-        config: config.clone(),
-        tx: tx.clone(),
-        rx: ui_update_receiver.resubscribe(),
-    };
-
-    runner.run();
-}
+// fn start_ui(
+//     config: &Config,
+//     exit_flag: &Arc<AtomicBool>,
+//     tx: &Sender<ServerCommand>,
+//     ui_update_receiver: &Receiver<ClientCommand>,
+// ) {
+//     let runner = EguiRunner {
+//         exit_flag: exit_flag.clone(),
+//         config: config.clone(),
+//         tx: tx.clone(),
+//         rx: ui_update_receiver.resubscribe(),
+//     };
+//
+//     runner.run();
+// }

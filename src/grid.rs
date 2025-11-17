@@ -5,6 +5,7 @@ use crate::{
 };
 use std::fmt;
 use std::sync::Arc;
+use std::sync::RwLock;
 
 #[cfg(test)]
 mod tests;
@@ -20,7 +21,7 @@ pub struct Cell {
 impl Default for Cell {
     fn default() -> Self {
         Self {
-            char: 'A',
+            char: ' ',
             fg: Color::White,
             bg: Color::Black,
             attrs: vec![SgrAttribute::default()],
@@ -49,7 +50,7 @@ pub struct Grid {
     cells: Vec<Vec<Cell>>,
     alternate_screen: Vec<Vec<Cell>>,
     alternate: bool,
-    config: Arc<Config>,
+    config: Arc<RwLock<Config>>,
     pub width: u16,
     pub height: u16,
     pub cursor_pos: (usize, usize),
@@ -59,9 +60,9 @@ pub struct Grid {
 }
 
 impl Grid {
-    pub fn new(config: Arc<Config>) -> Self {
-        let width = config.cols;
-        let height = config.rows;
+    pub fn new(config: Arc<RwLock<Config>>) -> Self {
+        let width = config.read().unwrap().cols;
+        let height = config.read().unwrap().rows;
         let cells = vec![vec![Cell::default(); width as usize]; height as usize];
         let alternate_screen = vec![vec![Cell::default(); width as usize]; height as usize];
 
@@ -80,26 +81,28 @@ impl Grid {
     }
 
     pub fn get_cell_pos(&self, row: u16, col: u16) -> (u16, u16) {
-        (
-            row * self.config.font_size as u16,
-            col * self.config.font_size as u16,
-        )
+        let config = self.config.read().unwrap();
+        (row * config.font_size as u16, col * config.font_size as u16)
     }
 
-    pub fn resize(&mut self) {
-        let cols = self.config.cols as usize;
-        let rows = self.config.rows as usize;
-
-        self.width = self.config.cols;
-        self.height = self.config.rows;
-
-        for grid in [&mut self.cells, &mut self.alternate_screen] {
-            grid.resize_with(rows, || vec![Cell::default(); cols]);
-
-            for row in grid.iter_mut() {
-                row.resize_with(cols, || Cell::default());
-            }
-        }
+    pub fn resize(&mut self, width: u16, height: u16) {
+        // let now = std::time::Instant::now();
+        // while now.elapsed().as_millis() < 5000 {
+        //     self.width = width;
+        //     self.height = height;
+        //
+        //     self.cells
+        //         .resize_with(height as usize, || vec![Cell::default(); width as usize]);
+        //     for row in &mut self.cells {
+        //         row.resize(width as usize, Cell::default());
+        //     }
+        //
+        //     self.alternate_screen
+        //         .resize_with(height as usize, || vec![Cell::default(); width as usize]);
+        //     for row in &mut self.alternate_screen {
+        //         row.resize(width as usize, Cell::default());
+        //     }
+        // }
     }
 
     pub fn active_grid(&mut self) -> &mut Vec<Vec<Cell>> {
