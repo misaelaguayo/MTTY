@@ -21,7 +21,7 @@ pub struct Cell {
 impl Default for Cell {
     fn default() -> Self {
         Self {
-            char: ' ',
+            char: 'a',
             fg: Color::White,
             bg: Color::Black,
             attrs: vec![SgrAttribute::default()],

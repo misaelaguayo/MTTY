@@ -14,6 +14,8 @@ let
     nixpkgs.libGL
     nixpkgs.libxkbcommon
     nixpkgs.wayland
+    nixpkgs.fontconfig
+    nixpkgs.freetype
   ];
 in
 nixpkgs.mkShell {
@@ -27,6 +29,11 @@ nixpkgs.mkShell {
     llvm
     cargo-tarpaulin
     cargo-bundle
+    fontconfig
+  ];
+
+  nativeBuildInputs = with nixpkgs; [
+    pkg-config
   ];
 
   shellHook = ''

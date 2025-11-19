@@ -1,7 +1,9 @@
+use crate::graphics::lib::Vertex;
 use crate::{config::Config, grid::Grid};
 use font_kit::source::SystemSource;
 use std::sync::Arc;
 use std::sync::RwLock;
+use wgpu::util::DeviceExt;
 use wgpu_text::{
     glyph_brush::{
         ab_glyph::{FontVec, PxScale},
@@ -26,11 +28,15 @@ struct State {
     size: winit::dpi::PhysicalSize<u32>,
     surface: wgpu::Surface<'static>,
     surface_format: wgpu::TextureFormat,
+    render_pipeline: wgpu::RenderPipeline,
+    vertex_buffer: wgpu::Buffer,
+    num_vertices: u32,
     brush: TextBrush<FontVec>,
 }
 
 impl State {
     async fn new(window: Arc<Window>, config: Arc<RwLock<Config>>) -> State {
+        let config_read = config.read().unwrap();
         let size = window.inner_size();
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
         let adapter = instance
@@ -46,6 +52,110 @@ impl State {
 
         let cap = surface.get_capabilities(&adapter);
         let surface_format = cap.formats[0];
+
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
+        });
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &[],
+            push_constant_ranges: &[],
+        });
+
+        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: None,
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_main"),
+                buffers: &[Vertex::desc()],
+                compilation_options: Default::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_main"),
+                compilation_options: Default::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: surface_format.add_srgb_suffix(),
+                    blend: Some(wgpu::BlendState::REPLACE),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: Some(wgpu::Face::Back),
+                polygon_mode: wgpu::PolygonMode::Fill,
+                unclipped_depth: false,
+                conservative: false,
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            multiview: None,
+            cache: None,
+        });
+
+        let grid_size = config_read.cols * config_read.rows;
+        let cell_height = 1.0 / (config_read.rows as f32 / config_read.font_size);
+        let cell_width = 1.0 / (config_read.cols as f32 / config_read.font_size);
+
+        let vertices: Vec<Vertex> = (0..grid_size)
+            .flat_map(|index| {
+                let top_left = [
+                    -1.0 + (index as f32 % config_read.cols as f32) * cell_width,
+                    1.0 - (index as f32 / config_read.cols as f32).floor() * cell_height,
+                    0.0,
+                ];
+                let bottom_left = [top_left[0], top_left[1] - cell_height, 0.0];
+                let top_right = [top_left[0] + cell_width, top_left[1], 0.0];
+                let bottom_right = [
+                    top_left[0] + cell_width,
+                    top_left[1] - cell_height,
+                    0.0,
+                ];
+
+                return [
+                    Vertex {
+                        position: top_left,
+                        color: [1.0, 0.0, 0.0],
+                    },
+                    Vertex {
+                        position: bottom_left,
+                        color: [0.0, 1.0, 0.0],
+                    },
+                    Vertex {
+                        position: top_right,
+                        color: [0.0, 0.0, 1.0],
+                    },
+                    Vertex {
+                        position: top_right,
+                        color: [0.0, 0.0, 1.0],
+                    },
+                    Vertex {
+                        position: bottom_left,
+                        color: [0.0, 1.0, 0.0],
+                    },
+                    Vertex {
+                        position: bottom_right,
+                        color: [1.0, 1.0, 0.0],
+                    },
+                ];
+            })
+            .collect();
+
+        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Vertex Buffer"),
+            contents: bytemuck::cast_slice(&vertices),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
+        let num_vertices = vertices.len() as u32;
 
         let font_bytes = SystemSource::new()
             .select_by_postscript_name("Hack Nerd Font")
@@ -71,6 +181,9 @@ impl State {
             size,
             surface,
             surface_format,
+            render_pipeline,
+            vertex_buffer,
+            num_vertices,
             brush,
             grid: Grid::new(Arc::clone(&config)),
         };
@@ -178,6 +291,10 @@ impl State {
             timestamp_writes: None,
             occlusion_query_set: None,
         });
+
+        renderpass.set_pipeline(&self.render_pipeline);
+        renderpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+        renderpass.draw(0..self.num_vertices, 0..1);
 
         self.brush
             .queue(&self.device, &self.queue, sections)
