@@ -1,4 +1,4 @@
-{ nixpkgs, fenix_cargo, fenix_rustc }:
+{ nixpkgs, fenixPkgs }:
 
 let
   llvmPath = nixpkgs.lib.makeBinPath [ nixpkgs.llvm ];
@@ -18,13 +18,15 @@ let
 in
 nixpkgs.mkShell {
   buildInputs = with nixpkgs; [
-    fenix_cargo
-    fenix_rustc
+    fenixPkgs.cargo
+    fenixPkgs.clippy
+    fenixPkgs.rustc
+    fenixPkgs.rustfmt
+    fenixPkgs.rust-analyzer
     nixpkgs-fmt
     llvm
     cargo-tarpaulin
     cargo-bundle
-    rust-analyzer
   ];
 
   shellHook = ''

@@ -12,9 +12,9 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
-        fenixPkgs = fenix.packages.${system}.minimal;
+        fenixPkgs = fenix.packages.${system}.complete;
       in
       {
-        devShells.default = pkgs.callPackage ./default.nix { nixpkgs = pkgs; fenix_cargo = fenixPkgs.cargo; fenix_rustc = fenixPkgs.rustc; };
+        devShells.default = pkgs.callPackage ./default.nix { nixpkgs = pkgs; fenixPkgs = fenixPkgs; };
       });
 }
