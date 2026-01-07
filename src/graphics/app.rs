@@ -1,5 +1,6 @@
 use std::sync::RwLock;
 use std::sync::Arc;
+use tokio::time::Instant;
 use winit::application::ApplicationHandler;
 use winit::dpi::Size;
 use winit::event::WindowEvent;
@@ -60,9 +61,22 @@ impl ApplicationHandler for App {
                 state.get_window().request_redraw();
             }
             WindowEvent::Resized(size) => {
-                state.resize(size);
+                state.pending_resize = Some(size);
+                state.last_resize = Instant::now();
+                // state.resize(size);
             }
             _ => (),
+        }
+    }
+
+    fn about_to_wait(&mut self, event_loop: &event_loop::ActiveEventLoop) {
+        const RESIZE_DEBOUNCE_MS: u128 = 100;
+        let state = self.state.as_mut().unwrap();
+        if let Some(size) = state.pending_resize {
+            if state.last_resize.elapsed().as_millis() >= RESIZE_DEBOUNCE_MS {
+                state.resize(size);
+                state.pending_resize = None;
+            }
         }
     }
 }

@@ -19,6 +19,17 @@ To run the coverage report, use the following command:
 cargo tarpaulin --out Html
 ```
 
+## Flamegraph
+To generate a flamegraph, for release builds, use the following command:
+```bash
+cargo-flamegraph flamegraph
+```
+
+For debug builds, use the following command:
+```bash
+cargo flamegraph --dev
+```
+
 ## Terminfo
 
 MTTY uses a custom terminfo file to allow custom features.

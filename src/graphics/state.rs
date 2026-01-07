@@ -1,6 +1,7 @@
 use std::sync::RwLock;
 use std::sync::Arc;
 use font_kit::source::SystemSource;
+use tokio::time::Instant;
 use wgpu::util::DeviceExt;
 use wgpu_text::glyph_brush::ab_glyph::FontVec;
 use wgpu_text::glyph_brush::ab_glyph::PxScale;
@@ -27,6 +28,8 @@ pub struct State {
     vertex_buffer: wgpu::Buffer,
     num_vertices: u32,
     brush: TextBrush<FontVec>,
+    pub pending_resize: Option<winit::dpi::PhysicalSize<u32>>,
+    pub last_resize: Instant
 }
 
 impl State {
@@ -206,6 +209,8 @@ impl State {
             num_vertices,
             brush,
             grid: Grid::new(Arc::clone(&config)),
+            pending_resize: None,
+            last_resize: Instant::now()
         };
 
         state.configure_surface();

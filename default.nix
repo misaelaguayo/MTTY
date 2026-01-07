@@ -20,6 +20,7 @@ let
 in
 nixpkgs.mkShell {
   buildInputs = with nixpkgs; [
+    cargo-flamegraph
     fenixPkgs.cargo
     fenixPkgs.clippy
     fenixPkgs.rustc

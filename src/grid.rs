@@ -1,3 +1,5 @@
+use tokio::time::Instant;
+
 use crate::{
     commands::SgrAttribute,
     config::Config,
@@ -51,6 +53,8 @@ pub struct Grid {
     alternate_screen: Vec<Vec<Cell>>,
     alternate: bool,
     config: Arc<RwLock<Config>>,
+    last_resize: Instant,
+    pending_size: Option<(u16, u16)>,
     pub width: u16,
     pub height: u16,
     pub cursor_pos: (usize, usize),
@@ -77,6 +81,8 @@ impl Grid {
             styles: Styles::default(),
             alternate: false,
             config,
+            last_resize: Instant::now(),
+            pending_size: None,
         }
     }
 
@@ -85,26 +91,26 @@ impl Grid {
         (row * config.font_size as u16, col * config.font_size as u16)
     }
 
-    pub fn resize(&mut self, width: u16, height: u16) {
-        // let now = std::time::Instant::now();
-        // while now.elapsed().as_millis() < 5000 {
-        //     self.width = width;
-        //     self.height = height;
-        //
-        //     self.cells
-        //         .resize_with(height as usize, || vec![Cell::default(); width as usize]);
-        //     for row in &mut self.cells {
-        //         row.resize(width as usize, Cell::default());
-        //     }
-        //
-        //     self.alternate_screen
-        //         .resize_with(height as usize, || vec![Cell::default(); width as usize]);
-        //     for row in &mut self.alternate_screen {
-        //         row.resize(width as usize, Cell::default());
-        //     }
-        // }
+pub fn resize(&mut self, width: u16, height: u16) {
+    if self.last_resize.elapsed().as_millis() < 100 {
+        return;
     }
 
+    self.width = width;
+    self.height = height;
+
+    self.cells
+        .resize_with(height as usize, || vec![Cell::default(); width as usize]);
+    for row in &mut self.cells {
+        row.resize(width as usize, Cell::default());
+    }
+
+    self.alternate_screen
+        .resize_with(height as usize, || vec![Cell::default(); width as usize]);
+    for row in &mut self.alternate_screen {
+        row.resize(width as usize, Cell::default());
+    }
+}
     pub fn active_grid(&mut self) -> &mut Vec<Vec<Cell>> {
         if self.alternate {
             &mut self.alternate_screen

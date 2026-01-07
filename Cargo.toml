@@ -23,3 +23,7 @@ winit = "0.30.12"
 name = "MTTY"
 identifier = "com.misaelaguayo.mtty"
 icon = ["assets/Icon.icns"]
+
+# enable debug symbols in release builds for use with flamegraph
+[profile.release]
+debug = true
