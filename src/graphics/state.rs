@@ -34,24 +34,38 @@ impl State {
         let config_read = config.read().unwrap();
         let size = window.inner_size();
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
+        
+        // an adapter is a handle to the actual graphics card
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions::default())
             .await
             .unwrap();
+
+        // the device is a logical representation of the graphics card
+        // the queue is used to submit commands to the device
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor::default())
             .await
             .unwrap();
 
+        // create the surface
         let surface = instance.create_surface(window.clone()).unwrap();
 
+        // get the surface capabilities
         let cap = surface.get_capabilities(&adapter);
+        // use the first available format
         let surface_format = cap.formats[0];
 
+        // a shader module is a compiled shader program
+        // we use wgsl (webgpu shading language) for our shaders
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
         });
+
+        // pipeline layout defines the resources that will be used by the pipeline
+        // although we don't use any resources in this example, we still need to create a layout
+        // to satisfy the pipeline creation
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[],
@@ -61,12 +75,16 @@ impl State {
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
             layout: Some(&pipeline_layout),
+            // vertex state defines the vertex shader and its inputs
+            // we have two vertex attributes: position and color
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
                 buffers: &[Vertex::desc()],
                 compilation_options: Default::default(),
             },
+            // fragment state defines the fragment shader and its outputs
+            // we have one color target: the surface format
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: Some("fs_main"),
@@ -77,6 +95,8 @@ impl State {
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
+            // primitive state defines how primitives are assembled and rasterized
+            // we use triangle lists and back-face culling
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
                 strip_index_format: None,
@@ -100,6 +120,9 @@ impl State {
         let cell_height = 1.0 / (config_read.rows as f32 / config_read.font_size);
         let cell_width = 1.0 / (config_read.cols as f32 / config_read.font_size);
 
+        // create 2D grid of vertices
+        // each cell is made up of two triangles (6 vertices)
+        // each cell represents a position in the terminal grid
         let vertices: Vec<Vertex> = (0..grid_size)
             .flat_map(|index| {
                 let top_left = [
@@ -144,8 +167,10 @@ impl State {
             })
             .collect();
 
+        // use vertex buffer to store vertices on the GPU
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
+            // use bytemuck to cast the vertices to a byte slice
             contents: bytemuck::cast_slice(&vertices),
             usage: wgpu::BufferUsages::VERTEX,
         });
