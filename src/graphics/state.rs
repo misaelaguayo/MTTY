@@ -1,6 +1,7 @@
-use std::sync::RwLock;
-use std::sync::Arc;
 use font_kit::source::SystemSource;
+use std::cmp::min;
+use std::sync::Arc;
+use std::sync::RwLock;
 use tokio::time::Instant;
 use wgpu::util::DeviceExt;
 use wgpu_text::glyph_brush::ab_glyph::FontVec;
@@ -29,7 +30,7 @@ pub struct State {
     num_vertices: u32,
     brush: TextBrush<FontVec>,
     pub pending_resize: Option<winit::dpi::PhysicalSize<u32>>,
-    pub last_resize: Instant
+    pub last_resize: Instant,
 }
 
 impl State {
@@ -37,7 +38,7 @@ impl State {
         let config_read = config.read().unwrap();
         let size = window.inner_size();
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
-        
+
         // an adapter is a handle to the actual graphics card
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions::default())
@@ -135,11 +136,7 @@ impl State {
                 ];
                 let bottom_left = [top_left[0], top_left[1] - cell_height, 0.0];
                 let top_right = [top_left[0] + cell_width, top_left[1], 0.0];
-                let bottom_right = [
-                    top_left[0] + cell_width,
-                    top_left[1] - cell_height,
-                    0.0,
-                ];
+                let bottom_right = [top_left[0] + cell_width, top_left[1] - cell_height, 0.0];
 
                 return [
                     Vertex {
@@ -210,7 +207,7 @@ impl State {
             brush,
             grid: Grid::new(Arc::clone(&config)),
             pending_resize: None,
-            last_resize: Instant::now()
+            last_resize: Instant::now(),
         };
 
         state.configure_surface();
@@ -262,13 +259,17 @@ impl State {
             .grid
             .scroll_pos
             .saturating_sub(self.grid.height as usize);
-        let end_row = self.grid.active_grid().len();
+        let end_row = min(
+            self.grid.active_grid().len(),
+            start_row + self.grid.height as usize,
+        );
 
         let mut sections: Vec<Section> = Vec::new();
 
         for i in start_row..end_row as usize {
             for j in 0..self.grid.width as usize {
-                let mut cell = self.grid.active_grid()[i][j].clone();
+                let index = i * self.grid.width as usize + j;
+                let mut cell = self.grid.active_grid()[index].clone();
                 let (y, x) = self.grid.get_cell_pos(i as u16, j as u16);
 
                 let cell_string = Box::leak(cell.char.to_string().into_boxed_str());
@@ -332,5 +333,3 @@ impl State {
         surface_texture.present();
     }
 }
-
-

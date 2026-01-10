@@ -39,6 +39,7 @@ nixpkgs.mkShell {
 
   shellHook = ''
     export LD_LIBRARY_PATH=${if nixpkgs.stdenv.isLinux then waylandPath else ""}:$LD_LIBRARY_PATH
+    export RUST_SRC_PATH=${fenixPkgs.rust-src}/lib/rustlib/src/rust/library
     export SHELL=nu
   '';
 }
