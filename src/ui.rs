@@ -262,7 +262,8 @@ impl EguiApp {
                 let (row, col) = self.grid.cursor_pos;
                 if col < self.grid.width as usize - 5 {
                     for i in col..col + 4 {
-                        self.grid.active_grid()[row][i] = Cell::new(
+                        let index = row * (self.grid.width as usize) + i;
+                        self.grid.active_grid()[index] = Cell::new(
                             ' ',
                             self.grid.styles.active_text_color,
                             self.grid.styles.active_background_color,
@@ -325,8 +326,11 @@ impl EguiApp {
     }
 
     fn clear_cells(&mut self, row: usize, col_range: std::ops::Range<usize>) {
-        for i in col_range {
-            self.grid.active_grid()[row][i] = Cell::new(
+        let start_index = row * (self.grid.width as usize) + col_range.start;
+        let end_index = row * (self.grid.width as usize) + col_range.end;
+
+        for i in start_index..end_index {
+            self.grid.active_grid()[i] = Cell::new(
                 ' ',
                 self.grid.styles.active_text_color,
                 self.grid.styles.active_background_color,
@@ -493,11 +497,16 @@ impl eframe::App for EguiApp {
                         .grid
                         .scroll_pos
                         .saturating_sub(self.grid.height as usize);
-                    let end_row = self.grid.active_grid().len();
+
+                    let end_row = min(
+                        self.grid.active_grid().len(),
+                        start_row + self.grid.height as usize,
+                    );
 
                     for i in start_row..end_row as usize {
                         for j in 0..self.grid.width as usize {
-                            let cell = self.grid.active_grid()[i][j].clone();
+                            let index = i * self.grid.width as usize + j;
+                            let cell = self.grid.active_grid()[index].clone();
 
                             let cell_text =
                                 if i == self.grid.cursor_pos.0 && j == self.grid.cursor_pos.1 {

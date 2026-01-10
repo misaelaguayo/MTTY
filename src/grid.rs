@@ -45,8 +45,8 @@ impl Cell {
 }
 
 pub struct Grid {
-    cells: Vec<Vec<Cell>>,
-    alternate_screen: Vec<Vec<Cell>>,
+    cells: Vec<Cell>,
+    alternate_screen: Vec<Cell>,
     alternate: bool,
     pub width: u16,
     pub height: u16,
@@ -60,8 +60,8 @@ impl Grid {
     pub fn new(config: &Config) -> Self {
         let width = config.cols;
         let height = config.rows;
-        let cells = vec![vec![Cell::default(); width as usize]; height as usize];
-        let alternate_screen = vec![vec![Cell::default(); width as usize]; height as usize];
+        let cells = vec![Cell::default(); (width as usize) * (height as usize)];
+        let alternate_screen = vec![Cell::default(); (width as usize) * (height as usize)];
 
         Self {
             width,
@@ -76,7 +76,7 @@ impl Grid {
         }
     }
 
-    pub fn active_grid(&mut self) -> &mut Vec<Vec<Cell>> {
+    pub fn active_grid(&mut self) -> &mut Vec<Cell> {
         if self.alternate {
             &mut self.alternate_screen
         } else {
@@ -103,15 +103,15 @@ impl Grid {
             self.styles.active_text_color
         );
 
-        for row in self.active_grid() {
-            for cell in row {
-                if cell.char == ' ' {
-                    print!(".");
-                } else {
-                    print!("{}", cell.char);
-                }
-            }
-            println!();
+        for row in 0..self.height as usize {
+            let start = row * self.width as usize;
+            let end = start + self.width as usize;
+            let row_cells = &self.active_grid()[start..end];
+            let row_str: String = row_cells
+                .iter()
+                .map(|cell| if cell.char == ' ' { '.' } else { cell.char })
+                .collect();
+            log::info!("{}", row_str);
         }
     }
 
@@ -132,13 +132,14 @@ impl Grid {
 
     pub fn add_rows(&mut self, rows: usize) {
         let cols = self.width;
-        let curr_rows = self.active_grid().len();
         let fg = self.styles.active_text_color;
         let bg = self.styles.active_background_color;
 
-        self.active_grid().resize_with(curr_rows + rows, || {
-            vec![Cell::new(' ', fg, bg); cols as usize]
-        });
+        for _ in 0..rows {
+            for _ in 0..cols {
+                self.active_grid().push(Cell::new(' ', fg, bg));
+            }
+        }
     }
 
     pub fn place_character_in_grid(&mut self, cols: u16, c: char) {
@@ -160,7 +161,13 @@ impl Grid {
                 self.set_pos(row, 0);
             }
             _ => {
-                self.active_grid()[row][col] = Cell::new(c, fg, bg);
+                // Calculate the index in the flat vector
+                let index = row * (self.width as usize) + col;
+                let active_grid_len = self.active_grid().len();
+                if index >= active_grid_len {
+                    self.add_rows(row - (active_grid_len / (self.width as usize)) + 1);
+                }
+                self.active_grid()[index] = Cell::new(c, fg, bg);
                 self.set_pos(row, col + 1);
             }
         }
@@ -172,12 +179,12 @@ impl Grid {
 
         // Clear out any rows which may have been added
         let rows = self.height as usize;
-        self.active_grid().truncate(rows);
+        let cols = self.width as usize;
+        self.active_grid().truncate(rows * cols);
 
-        for row in self.active_grid() {
-            for cell in row {
-                *cell = Cell::new(' ', fg, bg);
-            }
+        let active_grid_len = self.active_grid().len();
+        for i in 0..active_grid_len {
+            self.active_grid()[i] = Cell::new(' ', fg, bg);
         }
 
         self.scroll_pos = 0;
@@ -190,7 +197,10 @@ impl Grid {
         let fg = self.styles.active_text_color;
         let bg = self.styles.active_background_color;
 
-        self.active_grid()[row][col] = Cell::new(' ', fg, bg);
+        let index = row * (self.width as usize) + col;
+        if index < self.active_grid().len() {
+            self.active_grid()[index] = Cell::new(' ', fg, bg);
+        }
 
         if col > 0 {
             self.set_pos(row, col - 1);
