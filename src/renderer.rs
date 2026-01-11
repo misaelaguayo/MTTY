@@ -1,0 +1,614 @@
+use std::sync::Arc;
+
+use glyphon::{
+    Attrs, Buffer, Cache, Color as GlyphonColor, Family, FontSystem, Metrics, Resolution, Shaping,
+    SwashCache, TextArea, TextAtlas, TextBounds, TextRenderer, Viewport,
+};
+use wgpu::{
+    Backends, Buffer as WgpuBuffer, Device, DeviceDescriptor, Features, Instance,
+    InstanceDescriptor, Limits, PipelineCompilationOptions, PresentMode, Queue, RenderPipeline,
+    RequestAdapterOptions, Surface, SurfaceConfiguration, TextureUsages,
+};
+use winit::{dpi::PhysicalSize, window::Window};
+
+use crate::{
+    config::Config,
+    grid::Grid,
+    styles::{Color, Styles},
+};
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+struct BgVertex {
+    position: [f32; 2],
+    color: [f32; 4],
+}
+
+impl BgVertex {
+    const ATTRIBS: [wgpu::VertexAttribute; 2] =
+        wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x4];
+
+    fn desc() -> wgpu::VertexBufferLayout<'static> {
+        wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<BgVertex>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &Self::ATTRIBS,
+        }
+    }
+}
+
+pub struct Renderer {
+    device: Device,
+    queue: Queue,
+    surface: Surface<'static>,
+    surface_config: SurfaceConfiguration,
+    size: PhysicalSize<u32>,
+
+    // Text rendering (glyphon)
+    font_system: FontSystem,
+    swash_cache: SwashCache,
+    text_atlas: TextAtlas,
+    text_renderer: TextRenderer,
+    viewport: Viewport,
+    text_buffer: Buffer,
+
+    // Background rendering
+    bg_pipeline: RenderPipeline,
+    bg_vertex_buffer: WgpuBuffer,
+    bg_index_buffer: WgpuBuffer,
+
+    // Cell dimensions
+    cell_width: f32,
+    cell_height: f32,
+}
+
+impl Renderer {
+    pub fn new(window: Arc<Window>, config: &Config) -> Self {
+        let size = window.inner_size();
+        let font_size = config.font_size;
+
+        // Create wgpu instance
+        let instance = Instance::new(&InstanceDescriptor {
+            backends: Backends::all(),
+            ..Default::default()
+        });
+
+        // Create surface
+        let surface = instance.create_surface(window.clone()).unwrap();
+
+        // Request adapter and device
+        let (adapter, device, queue) = pollster::block_on(async {
+            let adapter = instance
+                .request_adapter(&RequestAdapterOptions {
+                    power_preference: wgpu::PowerPreference::default(),
+                    compatible_surface: Some(&surface),
+                    force_fallback_adapter: false,
+                })
+                .await
+                .expect("Failed to find an appropriate adapter");
+
+            let (device, queue) = adapter
+                .request_device(
+                    &DeviceDescriptor {
+                        label: Some("MTTY Device"),
+                        required_features: Features::empty(),
+                        required_limits: Limits::downlevel_webgl2_defaults()
+                            .using_resolution(adapter.limits()),
+                        memory_hints: Default::default(),
+                    },
+                    None,
+                )
+                .await
+                .expect("Failed to create device");
+
+            (adapter, device, queue)
+        });
+
+        // Configure surface
+        let surface_caps = surface.get_capabilities(&adapter);
+        let surface_format = surface_caps
+            .formats
+            .iter()
+            .find(|f| f.is_srgb())
+            .copied()
+            .unwrap_or(surface_caps.formats[0]);
+
+        let surface_config = SurfaceConfiguration {
+            usage: TextureUsages::RENDER_ATTACHMENT,
+            format: surface_format,
+            width: size.width,
+            height: size.height,
+            present_mode: PresentMode::AutoVsync,
+            alpha_mode: surface_caps.alpha_modes[0],
+            view_formats: vec![],
+            desired_maximum_frame_latency: 2,
+        };
+        surface.configure(&device, &surface_config);
+
+        // Initialize glyphon for text rendering
+        let mut font_system = FontSystem::new();
+
+        // Load the Hack font
+        let font_data = include_bytes!("../assets/Hack-Regular.ttf");
+        font_system.db_mut().load_font_data(font_data.to_vec());
+
+        let swash_cache = SwashCache::new();
+        let cache = Cache::new(&device);
+        let mut text_atlas = TextAtlas::new(&device, &queue, &cache, surface_format);
+        let text_renderer =
+            TextRenderer::new(&mut text_atlas, &device, wgpu::MultisampleState::default(), None);
+
+        let viewport = Viewport::new(&device, &cache);
+
+        // Create text buffer for rendering
+        let line_height = font_size * 1.2;
+        let mut text_buffer = Buffer::new(&mut font_system, Metrics::new(font_size, line_height));
+        text_buffer.set_size(&mut font_system, Some(size.width as f32), Some(size.height as f32));
+
+        // Measure actual cell width from font by shaping a character
+        let mut measure_buffer = Buffer::new(&mut font_system, Metrics::new(font_size, line_height));
+        measure_buffer.set_text(&mut font_system, "M", Attrs::new().family(Family::Monospace), Shaping::Advanced);
+        measure_buffer.shape_until_scroll(&mut font_system, false);
+
+        let cell_width = measure_buffer
+            .layout_runs()
+            .next()
+            .and_then(|run| run.glyphs.first())
+            .map(|g| g.w)
+            .unwrap_or(font_size * 0.6);
+        let cell_height = line_height;
+
+        log::info!("Measured cell dimensions: {}x{} (font_size: {})", cell_width, cell_height, font_size);
+
+        // Create background rendering pipeline
+        let bg_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Background Shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("shaders/bg.wgsl").into()),
+        });
+
+        let bg_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Background Pipeline Layout"),
+            bind_group_layouts: &[],
+            push_constant_ranges: &[],
+        });
+
+        let bg_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Background Pipeline"),
+            layout: Some(&bg_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &bg_shader,
+                entry_point: Some("vs_main"),
+                buffers: &[BgVertex::desc()],
+                compilation_options: PipelineCompilationOptions::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &bg_shader,
+                entry_point: Some("fs_main"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: surface_format,
+                    blend: Some(wgpu::BlendState::REPLACE),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: PipelineCompilationOptions::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: Some(wgpu::Face::Back),
+                polygon_mode: wgpu::PolygonMode::Fill,
+                unclipped_depth: false,
+                conservative: false,
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            multiview: None,
+            cache: None,
+        });
+
+        // Pre-allocate buffers for background quads
+        // Estimate max cells based on window size
+        let max_cells = ((size.width as f32 / cell_width) * (size.height as f32 / cell_height)) as usize + 1000;
+
+        let bg_vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Background Vertex Buffer"),
+            size: (max_cells * 4 * std::mem::size_of::<BgVertex>()) as u64,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let bg_index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Background Index Buffer"),
+            size: (max_cells * 6 * std::mem::size_of::<u32>()) as u64,
+            usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        Self {
+            device,
+            queue,
+            surface,
+            surface_config,
+            size,
+            font_system,
+            swash_cache,
+            text_atlas,
+            text_renderer,
+            viewport,
+            text_buffer,
+            bg_pipeline,
+            bg_vertex_buffer,
+            bg_index_buffer,
+            cell_width,
+            cell_height,
+        }
+    }
+
+    pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
+        if new_size.width > 0 && new_size.height > 0 {
+            self.size = new_size;
+            self.surface_config.width = new_size.width;
+            self.surface_config.height = new_size.height;
+            self.surface.configure(&self.device, &self.surface_config);
+
+            // Update text buffer size
+            self.text_buffer.set_size(
+                &mut self.font_system,
+                Some(new_size.width as f32),
+                Some(new_size.height as f32),
+            );
+
+            // Reallocate background buffers for new size
+            let max_cells = ((new_size.width as f32 / self.cell_width) * (new_size.height as f32 / self.cell_height)) as usize + 1000;
+
+            self.bg_vertex_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Background Vertex Buffer"),
+                size: (max_cells * 4 * std::mem::size_of::<BgVertex>()) as u64,
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+
+            self.bg_index_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Background Index Buffer"),
+                size: (max_cells * 6 * std::mem::size_of::<u32>()) as u64,
+                usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+        }
+    }
+
+    pub fn size(&self) -> PhysicalSize<u32> {
+        self.size
+    }
+
+    pub fn cell_dimensions(&self) -> (f32, f32) {
+        (self.cell_width, self.cell_height)
+    }
+
+    pub fn render(&mut self, grid: &Grid, styles: &Styles) -> Result<(), wgpu::SurfaceError> {
+        let output = self.surface.get_current_texture()?;
+        let view = output
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+
+        // Build background vertices and text content
+        let (bg_vertices, bg_indices, text_spans) = self.build_render_data(grid, styles);
+
+        // Upload background data
+        if !bg_vertices.is_empty() {
+            self.queue.write_buffer(
+                &self.bg_vertex_buffer,
+                0,
+                bytemuck::cast_slice(&bg_vertices),
+            );
+            self.queue.write_buffer(
+                &self.bg_index_buffer,
+                0,
+                bytemuck::cast_slice(&bg_indices),
+            );
+        }
+
+        // Prepare text rendering with per-character colors
+        let rich_text: Vec<(&str, Attrs)> = text_spans
+            .iter()
+            .map(|(text, color)| {
+                (
+                    text.as_str(),
+                    Attrs::new().family(Family::Monospace).color(*color),
+                )
+            })
+            .collect();
+
+        self.text_buffer.set_rich_text(
+            &mut self.font_system,
+            rich_text,
+            Attrs::new().family(Family::Monospace),
+            Shaping::Advanced,
+        );
+
+        // Shape the text to calculate glyph positions
+        self.text_buffer.shape_until_scroll(&mut self.font_system, false);
+
+        self.viewport.update(
+            &self.queue,
+            Resolution {
+                width: self.size.width,
+                height: self.size.height,
+            },
+        );
+
+        self.text_renderer
+            .prepare(
+                &self.device,
+                &self.queue,
+                &mut self.font_system,
+                &mut self.text_atlas,
+                &self.viewport,
+                [TextArea {
+                    buffer: &self.text_buffer,
+                    left: 0.0,
+                    top: 0.0,
+                    scale: 1.0,
+                    bounds: TextBounds {
+                        left: 0,
+                        top: 0,
+                        right: self.size.width as i32,
+                        bottom: self.size.height as i32,
+                    },
+                    default_color: GlyphonColor::rgb(255, 255, 255),
+                    custom_glyphs: &[],
+                }],
+                &mut self.swash_cache,
+            )
+            .unwrap();
+
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Render Encoder"),
+            });
+
+        // Convert default background color to wgpu::Color for clearing
+        let default_bg = color_to_rgba(styles.default_background_color, styles);
+        let clear_color = wgpu::Color {
+            r: default_bg[0] as f64,
+            g: default_bg[1] as f64,
+            b: default_bg[2] as f64,
+            a: 1.0,
+        };
+
+        {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Render Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(clear_color),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+            // Render backgrounds
+            if !bg_indices.is_empty() {
+                render_pass.set_pipeline(&self.bg_pipeline);
+                render_pass.set_vertex_buffer(0, self.bg_vertex_buffer.slice(..));
+                render_pass.set_index_buffer(
+                    self.bg_index_buffer.slice(..),
+                    wgpu::IndexFormat::Uint32,
+                );
+                render_pass.draw_indexed(0..bg_indices.len() as u32, 0, 0..1);
+            }
+
+            // Render text
+            self.text_renderer
+                .render(&self.text_atlas, &self.viewport, &mut render_pass)
+                .unwrap();
+        }
+
+        self.queue.submit(std::iter::once(encoder.finish()));
+        output.present();
+
+        // Trim atlas to free unused memory
+        self.text_atlas.trim();
+
+        Ok(())
+    }
+
+    fn build_render_data(
+        &self,
+        grid: &Grid,
+        styles: &Styles,
+    ) -> (Vec<BgVertex>, Vec<u32>, Vec<(String, GlyphonColor)>) {
+        let mut bg_vertices = Vec::new();
+        let mut bg_indices = Vec::new();
+        let mut text_spans: Vec<(String, GlyphonColor)> = Vec::new();
+
+        let width = self.size.width as f32;
+        let height = self.size.height as f32;
+
+        // Get default background for comparison (skip rendering cells that match default)
+        let default_bg = color_to_rgba(styles.default_background_color, styles);
+
+        let start_row = grid.scroll_pos.saturating_sub(grid.height as usize);
+        let active_cells = grid.active_grid_ref();
+        let grid_len = active_cells.len();
+        let end_row = std::cmp::min(grid_len / grid.width as usize, start_row + grid.height as usize);
+
+        let mut vertex_count = 0u32;
+
+        // Batch consecutive characters with same color
+        let mut current_span = String::new();
+        let mut current_color: Option<GlyphonColor> = None;
+
+        for row_idx in start_row..end_row {
+            for col_idx in 0..grid.width as usize {
+                let cell_index = row_idx * grid.width as usize + col_idx;
+
+                // Bounds check to prevent crash on grid corruption
+                if cell_index >= grid_len {
+                    break;
+                }
+
+                // Get cell from the active grid
+                let cell = &active_cells[cell_index];
+
+                let display_row = row_idx - start_row;
+
+                // Calculate cell position in pixels
+                let x = col_idx as f32 * self.cell_width;
+                let y = display_row as f32 * self.cell_height;
+
+                // Get background color
+                let bg_color = color_to_rgba(cell.bg, styles);
+
+                // Only render backgrounds that differ from the default (optimization)
+                let colors_differ = (bg_color[0] - default_bg[0]).abs() > 0.01
+                    || (bg_color[1] - default_bg[1]).abs() > 0.01
+                    || (bg_color[2] - default_bg[2]).abs() > 0.01;
+                if colors_differ {
+                    // Convert to normalized device coordinates (-1 to 1)
+                    let x0 = (x / width) * 2.0 - 1.0;
+                    let y0 = 1.0 - (y / height) * 2.0;
+                    let x1 = ((x + self.cell_width) / width) * 2.0 - 1.0;
+                    let y1 = 1.0 - ((y + self.cell_height) / height) * 2.0;
+
+                    let base_vertex = vertex_count;
+                    bg_vertices.push(BgVertex { position: [x0, y0], color: bg_color });
+                    bg_vertices.push(BgVertex { position: [x1, y0], color: bg_color });
+                    bg_vertices.push(BgVertex { position: [x1, y1], color: bg_color });
+                    bg_vertices.push(BgVertex { position: [x0, y1], color: bg_color });
+
+                    bg_indices.push(base_vertex);
+                    bg_indices.push(base_vertex + 1);
+                    bg_indices.push(base_vertex + 2);
+                    bg_indices.push(base_vertex);
+                    bg_indices.push(base_vertex + 2);
+                    bg_indices.push(base_vertex + 3);
+
+                    vertex_count += 4;
+                }
+
+                // Build text content - handle cursor
+                let char_to_render = if row_idx == grid.cursor_pos.0 && col_idx == grid.cursor_pos.1 {
+                    styles.cursor_state.to_string().chars().next().unwrap_or(' ')
+                } else {
+                    cell.char
+                };
+
+                // Get foreground color for this cell
+                let fg_color = color_to_glyphon(cell.fg, styles);
+
+                // Batch characters with same color
+                match current_color {
+                    Some(color) if colors_equal(color, fg_color) => {
+                        current_span.push(char_to_render);
+                    }
+                    _ => {
+                        // Flush previous span
+                        if !current_span.is_empty() {
+                            if let Some(color) = current_color {
+                                text_spans.push((std::mem::take(&mut current_span), color));
+                            }
+                        }
+                        current_span.push(char_to_render);
+                        current_color = Some(fg_color);
+                    }
+                }
+            }
+            // Flush span before newline
+            if !current_span.is_empty() {
+                if let Some(color) = current_color {
+                    text_spans.push((std::mem::take(&mut current_span), color));
+                }
+            }
+            current_color = None;
+            text_spans.push(("\n".to_string(), GlyphonColor::rgb(255, 255, 255)));
+        }
+
+        // Flush any remaining span
+        if !current_span.is_empty() {
+            if let Some(color) = current_color {
+                text_spans.push((current_span, color));
+            }
+        }
+
+        (bg_vertices, bg_indices, text_spans)
+    }
+}
+
+fn colors_equal(a: GlyphonColor, b: GlyphonColor) -> bool {
+    a.r() == b.r() && a.g() == b.g() && a.b() == b.b() && a.a() == b.a()
+}
+
+fn color_to_glyphon(color: Color, styles: &Styles) -> GlyphonColor {
+    let (r, g, b) = match color {
+        Color::Black => (0, 0, 0),
+        Color::Red => (205, 49, 49),
+        Color::Green => (13, 188, 121),
+        Color::Yellow => (229, 229, 16),
+        Color::Blue => (36, 114, 200),
+        Color::Magenta => (188, 63, 188),
+        Color::Cyan => (17, 168, 205),
+        Color::White => (229, 229, 229),
+        Color::Gray => (102, 102, 102),
+        Color::BrightRed => (241, 76, 76),
+        Color::BrightGreen => (35, 209, 139),
+        Color::BrightYellow => (245, 245, 67),
+        Color::BrightBlue => (59, 142, 234),
+        Color::BrightMagenta => (214, 112, 214),
+        Color::BrightCyan => (41, 184, 219),
+        Color::BrightWhite => (255, 255, 255),
+        Color::Rgb(r, g, b) => (r, g, b),
+        Color::Foreground => {
+            return color_to_glyphon(styles.active_text_color, styles);
+        }
+        Color::Background => {
+            return color_to_glyphon(styles.active_background_color, styles);
+        }
+        Color::ColorIndex(i) => {
+            return color_to_glyphon(styles.color_array[i as usize], styles);
+        }
+    };
+    GlyphonColor::rgb(r, g, b)
+}
+
+fn color_to_rgba(color: Color, styles: &Styles) -> [f32; 4] {
+    let (r, g, b) = match color {
+        Color::Black => (0, 0, 0),
+        Color::Red => (205, 49, 49),
+        Color::Green => (13, 188, 121),
+        Color::Yellow => (229, 229, 16),
+        Color::Blue => (36, 114, 200),
+        Color::Magenta => (188, 63, 188),
+        Color::Cyan => (17, 168, 205),
+        Color::White => (229, 229, 229),
+        Color::Gray => (102, 102, 102),
+        Color::BrightRed => (241, 76, 76),
+        Color::BrightGreen => (35, 209, 139),
+        Color::BrightYellow => (245, 245, 67),
+        Color::BrightBlue => (59, 142, 234),
+        Color::BrightMagenta => (214, 112, 214),
+        Color::BrightCyan => (41, 184, 219),
+        Color::BrightWhite => (255, 255, 255),
+        Color::Rgb(r, g, b) => (r, g, b),
+        Color::Foreground => {
+            return color_to_rgba(styles.active_text_color, styles);
+        }
+        Color::Background => {
+            return color_to_rgba(styles.active_background_color, styles);
+        }
+        Color::ColorIndex(i) => {
+            return color_to_rgba(styles.color_array[i as usize], styles);
+        }
+    };
+    [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, 1.0]
+}

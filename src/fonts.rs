@@ -1,67 +1,22 @@
-use eframe::{
-    egui::{self, FontFamily, FontId, TextStyle},
-    epaint::text::{FontInsert, InsertFontFamily},
-};
+use glyphon::FontSystem;
 
-use crate::config::Config;
+/// Creates and configures the font system with the Hack font
+pub fn create_font_system() -> FontSystem {
+    let mut font_system = FontSystem::new();
 
-fn add_font(ctx: &egui::Context) {
-    ctx.add_font(FontInsert::new(
-        "hack-font",
-        egui::FontData::from_static(include_bytes!("../assets/Hack-Regular.ttf")),
-        vec![
-            InsertFontFamily {
-                family: egui::FontFamily::Proportional,
-                priority: egui::epaint::text::FontPriority::Highest,
-            },
-            InsertFontFamily {
-                family: egui::FontFamily::Monospace,
-                priority: egui::epaint::text::FontPriority::Lowest,
-            },
-        ],
-    ));
+    // Load the Hack font
+    let font_data = include_bytes!("../assets/Hack-Regular.ttf");
+    font_system.db_mut().load_font_data(font_data.to_vec());
+
+    font_system
 }
 
-fn replace_fonts(ctx: &egui::Context) {
-    let mut fonts = egui::FontDefinitions::default();
-
-    fonts.font_data.insert(
-        "hack-font".to_owned(),
-        std::sync::Arc::new(egui::FontData::from_static(include_bytes!(
-            "../assets/Hack-Regular.ttf"
-        ))),
-    );
-
-    fonts
-        .families
-        .entry(egui::FontFamily::Proportional)
-        .or_default()
-        .insert(0, "hack-font".to_owned());
-
-    fonts
-        .families
-        .entry(egui::FontFamily::Monospace)
-        .or_default()
-        .push("hack-font".to_owned());
-
-    ctx.set_fonts(fonts);
-}
-
-pub fn configure_text_styles(ctx: &egui::Context, config: &Config) {
-    use FontFamily::Proportional;
-    use TextStyle::*;
-
-    replace_fonts(ctx);
-    add_font(ctx);
-
-    let mut style = (*ctx.style()).clone();
-    style.text_styles = [
-        (Heading, FontId::new(config.font_size + 2.0, Proportional)),
-        (Body, FontId::new(config.font_size, Proportional)),
-        (Monospace, FontId::new(config.font_size, Proportional)),
-        (Button, FontId::new(config.font_size, Proportional)),
-        (Small, FontId::new(config.font_size - 2.0, Proportional)),
-    ]
-    .into();
-    ctx.set_style(style);
+/// Calculate cell dimensions based on font size
+/// Returns (cell_width, cell_height)
+pub fn get_cell_size(font_size: f32) -> (f32, f32) {
+    // For monospace fonts, width is approximately 0.6 of the font size
+    // Height includes line spacing (1.2x font size)
+    let cell_width = font_size * 0.6;
+    let cell_height = font_size * 1.2;
+    (cell_width, cell_height)
 }

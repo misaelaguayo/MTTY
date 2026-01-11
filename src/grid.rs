@@ -84,8 +84,39 @@ impl Grid {
         }
     }
 
+    /// Get a read-only reference to the active grid
+    pub fn active_grid_ref(&self) -> &Vec<Cell> {
+        if self.alternate {
+            &self.alternate_screen
+        } else {
+            &self.cells
+        }
+    }
+
+    /// Check if currently using alternate screen
+    pub fn is_alternate(&self) -> bool {
+        self.alternate
+    }
+
     pub fn swap_active_grid(&mut self) {
         self.alternate = !self.alternate;
+        // Reset scroll position when switching screens
+        self.scroll_pos = self.height as usize - 1;
+    }
+
+    pub fn resize(&mut self, new_cols: u16, new_rows: u16) {
+        self.width = new_cols;
+        self.height = new_rows;
+
+        let new_size = (new_cols as usize) * (new_rows as usize);
+
+        // Clear and reinitialize both screens with new dimensions
+        self.cells = vec![Cell::default(); new_size];
+        self.alternate_screen = vec![Cell::default(); new_size];
+
+        // Reset positions
+        self.scroll_pos = new_rows as usize - 1;
+        self.cursor_pos = (0, 0);
     }
 
     pub fn pretty_print(&mut self) {
@@ -132,8 +163,12 @@ impl Grid {
 
     pub fn add_rows(&mut self, rows: usize) {
         let cols = self.width;
-        let fg = self.styles.active_text_color;
-        let bg = self.styles.active_background_color;
+        // Apply reverse video mode - swap fg and bg
+        let (fg, bg) = if self.styles.reverse {
+            (self.styles.active_background_color, self.styles.active_text_color)
+        } else {
+            (self.styles.active_text_color, self.styles.active_background_color)
+        };
 
         for _ in 0..rows {
             for _ in 0..cols {
@@ -150,8 +185,12 @@ impl Grid {
         }
 
         (row, col) = self.cursor_pos;
-        let fg = self.styles.active_text_color;
-        let bg = self.styles.active_background_color;
+        // Apply reverse video mode - swap fg and bg
+        let (fg, bg) = if self.styles.reverse {
+            (self.styles.active_background_color, self.styles.active_text_color)
+        } else {
+            (self.styles.active_text_color, self.styles.active_background_color)
+        };
 
         match c {
             '\n' => {
@@ -174,8 +213,12 @@ impl Grid {
     }
 
     pub fn clear_screen(&mut self) {
-        let fg = self.styles.active_text_color;
-        let bg = self.styles.active_background_color;
+        // Apply reverse video mode - swap fg and bg
+        let (fg, bg) = if self.styles.reverse {
+            (self.styles.active_background_color, self.styles.active_text_color)
+        } else {
+            (self.styles.active_text_color, self.styles.active_background_color)
+        };
 
         // Clear out any rows which may have been added
         let rows = self.height as usize;
@@ -194,8 +237,12 @@ impl Grid {
     pub fn delete_character(&mut self) {
         let (row, col) = self.cursor_pos;
         let cols = self.width as usize;
-        let fg = self.styles.active_text_color;
-        let bg = self.styles.active_background_color;
+        // Apply reverse video mode - swap fg and bg
+        let (fg, bg) = if self.styles.reverse {
+            (self.styles.active_background_color, self.styles.active_text_color)
+        } else {
+            (self.styles.active_text_color, self.styles.active_background_color)
+        };
 
         let index = row * (self.width as usize) + col;
         if index < self.active_grid().len() {

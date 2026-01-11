@@ -1,4 +1,3 @@
-use eframe::egui::Color32;
 use vte::ansi::Color as VteColor;
 
 #[derive(Debug, Clone, Copy)]
@@ -372,35 +371,65 @@ pub struct Styles {
     pub font_size: u32,
     pub italic: bool,
     pub underline: bool,
+    pub reverse: bool,
     pub color_array: [Color; 256],
     pub cursor_state: CursorState,
 }
 
 impl Styles {
-    pub fn to_color32(&mut self, color: Color) -> Color32 {
+    /// Convert a Color to RGBA float array [r, g, b, a] for wgpu
+    pub fn to_wgpu_color(&self, color: Color) -> [f32; 4] {
+        let (r, g, b) = match color {
+            Color::Black => (0, 0, 0),
+            Color::Red => (128, 0, 0),
+            Color::Green => (0, 128, 0),
+            Color::Yellow => (128, 128, 0),
+            Color::Blue => (0, 0, 128),
+            Color::Magenta => (128, 0, 128),
+            Color::Cyan => (0, 128, 128),
+            Color::White => (192, 192, 192),
+            Color::Gray => (128, 128, 128),
+            Color::BrightRed => (255, 0, 0),
+            Color::BrightGreen => (0, 255, 0),
+            Color::BrightYellow => (255, 255, 0),
+            Color::BrightBlue => (0, 0, 255),
+            Color::BrightMagenta => (255, 0, 255),
+            Color::BrightCyan => (0, 255, 255),
+            Color::BrightWhite => (255, 255, 255),
+            Color::Rgb(r, g, b) => (r, g, b),
+            Color::Foreground => return self.to_wgpu_color(self.active_text_color),
+            Color::Background => return self.to_wgpu_color(self.active_background_color),
+            Color::ColorIndex(i) => return self.to_wgpu_color(self.color_array[i as usize]),
+        };
+        [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, 1.0]
+    }
+
+    /// Convert a Color to RGB u8 tuple for glyphon
+    pub fn to_rgb(&self, color: Color) -> (u8, u8, u8) {
         match color {
-            Color::Black => Color32::BLACK,
-            Color::Red => Color32::RED,
-            Color::Green => Color32::GREEN,
-            Color::Yellow => Color32::YELLOW,
-            Color::Blue => Color32::BLUE,
-            Color::Magenta => Color32::from_rgb(0, 111, 184),
-            Color::Cyan => Color32::from_rgb(111, 38, 113),
-            Color::White => Color32::WHITE,
-            Color::Gray => Color32::GRAY,
-            Color::BrightRed => Color32::from_rgb(255, 0, 0),
-            Color::BrightGreen => Color32::from_rgb(0, 255, 0),
-            Color::BrightYellow => Color32::from_rgb(255, 255, 0),
-            Color::BrightBlue => Color32::from_rgb(0, 0, 255),
-            Color::BrightMagenta => Color32::from_rgb(255, 0, 255),
-            Color::BrightCyan => Color32::from_rgb(0, 255, 255),
-            Color::BrightWhite => Color32::from_rgb(255, 255, 255),
-            Color::Rgb(r, g, b) => Color32::from_rgb(r, g, b),
-            Color::Foreground => self.to_color32(self.active_text_color),
-            Color::Background => self.to_color32(self.active_background_color),
-            Color::ColorIndex(i) => self.to_color32(self.color_array[i as usize]),
+            Color::Black => (0, 0, 0),
+            Color::Red => (128, 0, 0),
+            Color::Green => (0, 128, 0),
+            Color::Yellow => (128, 128, 0),
+            Color::Blue => (0, 0, 128),
+            Color::Magenta => (128, 0, 128),
+            Color::Cyan => (0, 128, 128),
+            Color::White => (192, 192, 192),
+            Color::Gray => (128, 128, 128),
+            Color::BrightRed => (255, 0, 0),
+            Color::BrightGreen => (0, 255, 0),
+            Color::BrightYellow => (255, 255, 0),
+            Color::BrightBlue => (0, 0, 255),
+            Color::BrightMagenta => (255, 0, 255),
+            Color::BrightCyan => (0, 255, 255),
+            Color::BrightWhite => (255, 255, 255),
+            Color::Rgb(r, g, b) => (r, g, b),
+            Color::Foreground => self.to_rgb(self.active_text_color),
+            Color::Background => self.to_rgb(self.active_background_color),
+            Color::ColorIndex(i) => self.to_rgb(self.color_array[i as usize]),
         }
     }
+
     pub fn default() -> Self {
         Self {
             active_background_color: Color::Black,
@@ -410,6 +439,7 @@ impl Styles {
             font_size: 16,
             italic: false,
             underline: false,
+            reverse: false,
             color_array: Color::DEFAULT_ARRAY,
             cursor_state: CursorState::default(),
         }

@@ -228,28 +228,66 @@ impl Term {
     fn default_shell_command() -> Command {
         let shell = env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
 
-        Command::new(shell)
+        let mut command = Command::new(&shell);
+
+        // Use -l to run as login shell, which loads profile files
+        command.arg("-l");
+
+        // Set essential environment variables
+        command.env("TERM", "xterm-256color");
+        command.env("COLORTERM", "truecolor");
+
+        // Preserve important environment variables
+        if let Ok(home) = env::var("HOME") {
+            command.env("HOME", home);
+        }
+        if let Ok(user) = env::var("USER") {
+            command.env("USER", user);
+        }
+        if let Ok(path) = env::var("PATH") {
+            command.env("PATH", path);
+        }
+        if let Ok(lang) = env::var("LANG") {
+            command.env("LANG", lang);
+        }
+        if let Ok(xdg_config) = env::var("XDG_CONFIG_HOME") {
+            command.env("XDG_CONFIG_HOME", xdg_config);
+        }
+
+        command
     }
 
     #[cfg(target_os = "macos")]
     fn default_shell_command() -> Command {
         let shell = env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
 
-        let user = env::var("USER").expect("Failed to get user");
+        // Launch shell as a login shell (with "-" prefix or -l flag)
+        let mut command = Command::new(&shell);
 
-        let mut command = Command::new("/usr/bin/login");
+        // Use -l to run as login shell, which loads profile files
+        command.arg("-l");
 
-        let exec = format!("exec -l {}", shell);
-        command.args([
-            "-q",
-            "-flp",
-            &user,
-            "/bin/bash",
-            "--noprofile",
-            "--norc",
-            "-c",
-            &exec,
-        ]);
+        // Set essential environment variables
+        command.env("TERM", "xterm-256color");
+        command.env("COLORTERM", "truecolor");
+
+        // Preserve important environment variables
+        if let Ok(home) = env::var("HOME") {
+            command.env("HOME", home);
+        }
+        if let Ok(user) = env::var("USER") {
+            command.env("USER", user);
+        }
+        if let Ok(path) = env::var("PATH") {
+            command.env("PATH", path);
+        }
+        if let Ok(lang) = env::var("LANG") {
+            command.env("LANG", lang);
+        }
+        if let Ok(xdg_config) = env::var("XDG_CONFIG_HOME") {
+            command.env("XDG_CONFIG_HOME", xdg_config);
+        }
+
         command
     }
 }
@@ -263,10 +301,10 @@ fn enable_raw_mode(termios: &mut Termios) {
             | termios::InputModes::IXON,
     );
     termios.output_modes.remove(termios::OutputModes::OPOST);
+    // Keep ISIG enabled so Ctrl+C generates SIGINT, Ctrl+Z generates SIGTSTP, etc.
     termios.local_modes.remove(
         termios::LocalModes::ECHO
             | termios::LocalModes::ICANON
-            | termios::LocalModes::ISIG
             | termios::LocalModes::IEXTEN,
     );
     termios.control_modes.remove(termios::ControlModes::CS8);

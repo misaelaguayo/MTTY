@@ -3,14 +3,21 @@ use std::{
     sync::{atomic::AtomicBool, Arc},
 };
 
-use eframe::egui::{self, Pos2};
-use tokio::sync::broadcast::{self, Receiver, Sender};
+use tokio::sync::broadcast::{Receiver, Sender};
+use winit::{
+    application::ApplicationHandler,
+    dpi::PhysicalSize,
+    event::{ElementState, KeyEvent, MouseScrollDelta, WindowEvent},
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+    keyboard::{Key, PhysicalKey, KeyCode},
+    window::{Window, WindowAttributes, WindowId},
+};
 
 use crate::{
     commands::{ClientCommand, IdentifyTerminalMode, ServerCommand, SgrAttribute},
     config::Config,
-    fonts,
     grid::{Cell, Grid},
+    renderer::Renderer,
     styles::{Color, Styles},
 };
 
@@ -18,63 +25,47 @@ use crate::{
 mod tests;
 
 // Trait defining a runner that can execute the UI
-// This allows for different implementations of the UI e.g. Egui, Iced, etc.
+// This allows for different implementations of the UI
 pub trait Runner {
     fn run(self);
 }
 
-pub struct EguiRunner {
+pub struct WgpuRunner {
     pub exit_flag: Arc<AtomicBool>,
     pub config: Config,
     pub tx: Sender<ServerCommand>,
     pub rx: Receiver<ClientCommand>,
 }
 
-impl Runner for EguiRunner {
+impl Runner for WgpuRunner {
     fn run(self) {
-        let options = eframe::NativeOptions {
-            viewport: eframe::egui::ViewportBuilder::default()
-                .with_icon(eframe::egui::IconData::default())
-                .with_inner_size([self.config.width, self.config.height]),
-            ..Default::default()
-        };
+        let event_loop = EventLoop::new().expect("Failed to create event loop");
+        event_loop.set_control_flow(ControlFlow::Poll);
 
-        let egui_ui = EguiApp::new(
+        let mut app = WgpuApp::new(
             &self.config,
             self.exit_flag.clone(),
             self.tx.clone(),
             self.rx.resubscribe(),
         );
 
-        eframe::run_native(
-            "MTTY",
-            options,
-            Box::new(|cc| {
-                let ctx = cc.egui_ctx.clone();
-                fonts::configure_text_styles(&ctx, &self.config);
-                tokio::spawn(async move {
-                    redraw(ctx, self.rx, self.exit_flag);
-                });
-
-                Ok(Box::new(egui_ui))
-            }),
-        )
-        .unwrap_or_else(|e| {
-            log::error!("Failed to start egui UI: {}", e);
-        });
+        event_loop.run_app(&mut app).expect("Event loop failed");
     }
 }
 
-pub struct EguiApp {
+pub struct WgpuApp {
     exit_flag: Arc<AtomicBool>,
     input: String,
     tx: Sender<ServerCommand>,
     rx: Receiver<ClientCommand>,
     config: Config,
     grid: Grid,
+    window: Option<Arc<Window>>,
+    renderer: Option<Renderer>,
+    modifiers: winit::keyboard::ModifiersState,
 }
 
-impl EguiApp {
+impl WgpuApp {
     pub fn new(
         config: &Config,
         exit_flag: Arc<AtomicBool>,
@@ -89,6 +80,9 @@ impl EguiApp {
             rx,
             config: config.clone(),
             grid: Grid::new(config),
+            window: None,
+            renderer: None,
+            modifiers: winit::keyboard::ModifiersState::empty(),
         }
     }
 
@@ -121,7 +115,9 @@ impl EguiApp {
             SgrAttribute::DashedUnderline => {}
             SgrAttribute::BlinkSlow => {}
             SgrAttribute::BlinkFast => {}
-            SgrAttribute::Reverse => {}
+            SgrAttribute::Reverse => {
+                self.grid.styles.reverse = true;
+            }
             SgrAttribute::Hidden => {}
             SgrAttribute::Strike => {}
             SgrAttribute::CancelBold => {
@@ -137,7 +133,9 @@ impl EguiApp {
                 self.grid.styles.underline = false;
             }
             SgrAttribute::CancelBlink => {}
-            SgrAttribute::CancelReverse => {}
+            SgrAttribute::CancelReverse => {
+                self.grid.styles.reverse = false;
+            }
             SgrAttribute::CancelHidden => {}
             SgrAttribute::Foreground(color) => match color {
                 Color::Foreground => {
@@ -261,13 +259,14 @@ impl EguiApp {
             ClientCommand::PutTab => {
                 let (row, col) = self.grid.cursor_pos;
                 if col < self.grid.width as usize - 5 {
+                    let (fg, bg) = if self.grid.styles.reverse {
+                        (self.grid.styles.active_background_color, self.grid.styles.active_text_color)
+                    } else {
+                        (self.grid.styles.active_text_color, self.grid.styles.active_background_color)
+                    };
                     for i in col..col + 4 {
                         let index = row * (self.grid.width as usize) + i;
-                        self.grid.active_grid()[index] = Cell::new(
-                            ' ',
-                            self.grid.styles.active_text_color,
-                            self.grid.styles.active_background_color,
-                        );
+                        self.grid.active_grid()[index] = Cell::new(' ', fg, bg);
                         self.grid.set_pos(row, i + 1);
                     }
                 }
@@ -307,10 +306,31 @@ impl EguiApp {
             }
             ClientCommand::DeleteLines(count) => {
                 let (row, _) = self.grid.cursor_pos;
-                // delete lines at cursor position
+                let width = self.grid.width as usize;
+                let height = self.grid.height as usize;
+                let count = count as usize;
+                let (fg, bg) = if self.grid.styles.reverse {
+                    (self.grid.styles.active_background_color, self.grid.styles.active_text_color)
+                } else {
+                    (self.grid.styles.active_text_color, self.grid.styles.active_background_color)
+                };
 
-                for _ in row..row + count as usize + 1 {
-                    self.grid.active_grid().remove(row);
+                // Delete lines at cursor position by shifting lines up
+                let start_idx = row * width;
+                let lines_to_delete = std::cmp::min(count, height - row);
+
+                // Remove the lines
+                let remove_count = lines_to_delete * width;
+                let grid = self.grid.active_grid();
+                if start_idx + remove_count <= grid.len() {
+                    grid.drain(start_idx..start_idx + remove_count);
+                }
+
+                // Add blank lines at the bottom to maintain grid size
+                for _ in 0..lines_to_delete {
+                    for _ in 0..width {
+                        self.grid.active_grid().push(Cell::new(' ', fg, bg));
+                    }
                 }
             }
             ClientCommand::SetCursorState(state) => {
@@ -329,132 +349,168 @@ impl EguiApp {
         let start_index = row * (self.grid.width as usize) + col_range.start;
         let end_index = row * (self.grid.width as usize) + col_range.end;
 
+        let (fg, bg) = if self.grid.styles.reverse {
+            (self.grid.styles.active_background_color, self.grid.styles.active_text_color)
+        } else {
+            (self.grid.styles.active_text_color, self.grid.styles.active_background_color)
+        };
+
         for i in start_index..end_index {
-            self.grid.active_grid()[i] = Cell::new(
-                ' ',
-                self.grid.styles.active_text_color,
-                self.grid.styles.active_background_color,
+            self.grid.active_grid()[i] = Cell::new(' ', fg, bg);
+        }
+    }
+
+    fn handle_keyboard_input(&mut self, event: &KeyEvent) {
+        if event.state != ElementState::Pressed {
+            return;
+        }
+
+        // Handle special keys
+        match event.physical_key {
+            PhysicalKey::Code(KeyCode::Backspace) => {
+                self.send_raw_data(vec![8]);
+                return;
+            }
+            PhysicalKey::Code(KeyCode::Escape) => {
+                self.grid.pretty_print();
+                self.send_raw_data(vec![27]);
+                return;
+            }
+            PhysicalKey::Code(KeyCode::ArrowUp) => {
+                self.send_raw_data(vec![27, 91, 65]);
+                return;
+            }
+            PhysicalKey::Code(KeyCode::ArrowDown) => {
+                self.send_raw_data(vec![27, 91, 66]);
+                return;
+            }
+            PhysicalKey::Code(KeyCode::ArrowLeft) => {
+                self.send_raw_data(vec![27, 91, 68]);
+                return;
+            }
+            PhysicalKey::Code(KeyCode::ArrowRight) => {
+                self.send_raw_data(vec![27, 91, 67]);
+                return;
+            }
+            PhysicalKey::Code(KeyCode::Enter) => {
+                self.send_raw_data(vec![13]);
+                return;
+            }
+            PhysicalKey::Code(KeyCode::Tab) => {
+                self.send_raw_data(vec![9]);
+                return;
+            }
+            PhysicalKey::Code(KeyCode::Space) => {
+                self.send_raw_data(vec![32]);
+                return;
+            }
+            _ => {}
+        }
+
+        // Handle Ctrl+key combinations using physical key codes
+        if self.modifiers.control_key() {
+            match event.physical_key {
+                PhysicalKey::Code(KeyCode::KeyC) => {
+                    self.send_raw_data(vec![3]);
+                    return;
+                }
+                PhysicalKey::Code(KeyCode::KeyD) => {
+                    self.send_raw_data(vec![4]);
+                    return;
+                }
+                PhysicalKey::Code(KeyCode::KeyL) => {
+                    self.send_raw_data(vec![12]);
+                    return;
+                }
+                PhysicalKey::Code(KeyCode::KeyU) => {
+                    self.send_raw_data(vec![21]);
+                    return;
+                }
+                PhysicalKey::Code(KeyCode::KeyW) => {
+                    self.send_raw_data(vec![23]);
+                    return;
+                }
+                PhysicalKey::Code(KeyCode::KeyZ) => {
+                    self.send_raw_data(vec![26]);
+                    return;
+                }
+                _ => {}
+            }
+        }
+
+        // Handle regular text input
+        if !self.modifiers.control_key() {
+            if let Key::Character(ref text) = event.logical_key {
+                self.input.push_str(text);
+            }
+        }
+    }
+
+    fn handle_resize(&mut self, new_size: PhysicalSize<u32>) {
+        if let Some(renderer) = &mut self.renderer {
+            renderer.resize(new_size);
+        }
+
+        let new_width = new_size.width as f32;
+        let new_height = new_size.height as f32;
+
+        if new_width != self.config.width || new_height != self.config.height {
+            log::info!(
+                "Window resized: new width = {}, new height = {}",
+                new_width,
+                new_height
+            );
+
+            self.config.width = new_width;
+            self.config.height = new_height;
+
+            // Use actual cell dimensions from renderer if available
+            let (new_cols, new_rows) = if let Some(renderer) = &self.renderer {
+                let (cell_width, cell_height) = renderer.cell_dimensions();
+                (
+                    (new_width / cell_width).floor() as u16,
+                    (new_height / cell_height).floor() as u16,
+                )
+            } else {
+                self.config.get_col_rows_from_size(new_width, new_height)
+            };
+
+            // Update grid and config dimensions
+            self.grid.resize(new_cols, new_rows);
+            self.config.cols = new_cols;
+            self.config.rows = new_rows;
+
+            self.tx
+                .send(ServerCommand::Resize(
+                    new_cols,
+                    new_rows,
+                    new_size.width as u16,
+                    new_size.height as u16,
+                ))
+                .expect("Failed to send resize command");
+        }
+    }
+
+    fn handle_mouse_wheel(&mut self, delta: MouseScrollDelta) {
+        let y = match delta {
+            MouseScrollDelta::LineDelta(_, y) => y,
+            MouseScrollDelta::PixelDelta(pos) => pos.y as f32 / 20.0,
+        };
+
+        if y > 0.0 {
+            self.grid.scroll_pos = max(
+                self.grid.height as usize - 1,
+                self.grid.scroll_pos.saturating_sub(1),
+            );
+        } else {
+            self.grid.scroll_pos = min(
+                self.grid.active_grid().len().saturating_sub(1),
+                self.grid.scroll_pos + 1,
             );
         }
     }
 
-    fn handle_event(&mut self, event: &egui::Event, viewport: Option<egui::Rect>) {
-        if let Some(rect) = viewport {
-            let Pos2 { x: x0, y: y0 } = rect.min;
-            let Pos2 { x: x1, y: y1 } = rect.max;
-
-            let new_width = (x1 - x0) as usize;
-            let new_height = (y1 - y0) as usize;
-
-            if new_width != self.config.width as usize || new_height != self.config.height as usize
-            {
-                log::info!(
-                    "Viewport changed: new width = {}, new height = {}",
-                    new_width,
-                    new_height
-                );
-
-                self.config.width = new_width as f32;
-                self.config.height = new_height as f32;
-
-                let (new_cols, new_rows) = self
-                    .config
-                    .get_col_rows_from_size(self.config.width, self.config.height);
-
-                self.tx
-                    .send(ServerCommand::Resize(
-                        new_cols,
-                        new_rows,
-                        new_width as u16,
-                        new_height as u16,
-                    ))
-                    .expect("Failed to send resize command");
-            }
-        }
-
-        match event {
-            egui::Event::Key {
-                key,
-                modifiers,
-                repeat: false,
-                pressed: true,
-                ..
-            } => {
-                match key {
-                    egui::Key::Backspace => {
-                        self.send_raw_data(vec![8]);
-                    }
-                    egui::Key::Escape => {
-                        self.grid.pretty_print();
-                        self.send_raw_data(vec![27]);
-                    }
-                    egui::Key::ArrowUp => {
-                        self.send_raw_data(vec![27, 91, 65]);
-                    }
-                    egui::Key::ArrowDown => {
-                        self.send_raw_data(vec![27, 91, 66]);
-                    }
-                    egui::Key::ArrowLeft => {
-                        self.send_raw_data(vec![27, 91, 68]);
-                    }
-                    egui::Key::ArrowRight => {
-                        self.send_raw_data(vec![27, 91, 67]);
-                    }
-                    egui::Key::Enter => {
-                        self.send_raw_data(vec![13]);
-                    }
-                    egui::Key::Tab => {
-                        self.send_raw_data(vec![9]);
-                    }
-                    _ => {}
-                }
-
-                match modifiers {
-                    egui::Modifiers { ctrl: true, .. } => match key.name() {
-                        "C" => {
-                            self.send_raw_data(vec![3]);
-                        }
-                        "D" => {
-                            self.send_raw_data(vec![4]);
-                        }
-                        "L" => {
-                            self.send_raw_data(vec![12]);
-                        }
-                        "U" => {
-                            self.send_raw_data(vec![21]);
-                        }
-                        "W" => {
-                            self.send_raw_data(vec![23]);
-                        }
-                        _ => {}
-                    },
-                    _ => {}
-                }
-            }
-            egui::Event::Text(text) => {
-                self.input.push_str(text);
-            }
-            egui::Event::MouseWheel { delta, .. } => {
-                let y = delta.y;
-                if y > 0.0 {
-                    self.grid.scroll_pos = max(
-                        self.grid.height as usize - 1,
-                        self.grid.scroll_pos.saturating_sub(1),
-                    );
-                } else {
-                    self.grid.scroll_pos = min(
-                        self.grid.active_grid().len().saturating_sub(1),
-                        self.grid.scroll_pos + 1,
-                    );
-                }
-            }
-            _ => {}
-        }
-    }
-}
-
-impl eframe::App for EguiApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn process_commands(&mut self) {
         // Process commands for a limited time to avoid blocking the UI
         let now = std::time::Instant::now();
         while now.elapsed().as_millis() < 50 {
@@ -467,83 +523,119 @@ impl eframe::App for EguiApp {
                 }
             }
         }
+    }
 
-        while self.input.len() > 0 {
+    fn process_input(&mut self) {
+        while !self.input.is_empty() {
             let c = self.input.remove(0);
             self.send_raw_data(vec![c as u8]);
         }
-
-        let frame = egui::Frame {
-            inner_margin: egui::Margin::ZERO,
-            outer_margin: egui::Margin::ZERO,
-            ..Default::default()
-        };
-
-        egui::CentralPanel::default().frame(frame).show(ctx, |ui| {
-            ui.input(|i| {
-                i.raw.events.iter().for_each(|event| {
-                    self.handle_event(event, i.viewport().inner_rect);
-                });
-            });
-
-            egui::Grid::new("grid")
-                .striped(false)
-                .min_col_width(0.0)
-                .max_col_width(10.0)
-                .min_row_height(0.0)
-                .spacing([0.0, 0.0])
-                .show(ui, |ui| {
-                    let start_row = self
-                        .grid
-                        .scroll_pos
-                        .saturating_sub(self.grid.height as usize);
-
-                    let end_row = min(
-                        self.grid.active_grid().len(),
-                        start_row + self.grid.height as usize,
-                    );
-
-                    for i in start_row..end_row as usize {
-                        for j in 0..self.grid.width as usize {
-                            let index = i * self.grid.width as usize + j;
-                            let cell = self.grid.active_grid()[index].clone();
-
-                            let cell_text =
-                                if i == self.grid.cursor_pos.0 && j == self.grid.cursor_pos.1 {
-                                    self.grid.styles.cursor_state.to_string()
-                                } else {
-                                    cell.to_string()
-                                };
-
-                            ui.monospace(
-                                egui::RichText::new(cell_text)
-                                    .color(self.grid.styles.to_color32(cell.fg))
-                                    .background_color(self.grid.styles.to_color32(cell.bg)),
-                            );
-                        }
-                        ui.end_row();
-                    }
-                });
-        });
-    }
-
-    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
-        self.exit_flag
-            .store(true, std::sync::atomic::Ordering::Relaxed);
     }
 }
 
-fn redraw(
-    ctx: egui::Context,
-    mut rx: broadcast::Receiver<ClientCommand>,
-    exit_flag: Arc<AtomicBool>,
-) {
-    loop {
-        if exit_flag.load(std::sync::atomic::Ordering::Acquire) {
-            break;
+impl ApplicationHandler for WgpuApp {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        if self.window.is_none() {
+            let window_attributes = WindowAttributes::default()
+                .with_title("MTTY")
+                .with_inner_size(PhysicalSize::new(
+                    self.config.width as u32,
+                    self.config.height as u32,
+                ));
+
+            let window = Arc::new(
+                event_loop
+                    .create_window(window_attributes)
+                    .expect("Failed to create window"),
+            );
+
+            let renderer = Renderer::new(window.clone(), &self.config);
+
+            // Get actual cell dimensions from renderer and recalculate grid size
+            let (cell_width, cell_height) = renderer.cell_dimensions();
+            let new_cols = (self.config.width / cell_width).floor() as u16;
+            let new_rows = (self.config.height / cell_height).floor() as u16;
+
+            if new_cols != self.config.cols || new_rows != self.config.rows {
+                log::info!(
+                    "Updating grid size from {}x{} to {}x{} based on actual cell dimensions",
+                    self.config.cols, self.config.rows, new_cols, new_rows
+                );
+                self.config.cols = new_cols;
+                self.config.rows = new_rows;
+                self.grid = Grid::new(&self.config);
+
+                // Notify the PTY of the correct size
+                self.tx
+                    .send(ServerCommand::Resize(
+                        new_cols,
+                        new_rows,
+                        self.config.width as u16,
+                        self.config.height as u16,
+                    ))
+                    .expect("Failed to send resize command");
+            }
+
+            self.window = Some(window);
+            self.renderer = Some(renderer);
         }
-        while let Ok(_) = rx.try_recv() {
-            ctx.request_repaint();
+    }
+
+    fn window_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        _window_id: WindowId,
+        event: WindowEvent,
+    ) {
+        match event {
+            WindowEvent::CloseRequested => {
+                self.exit_flag
+                    .store(true, std::sync::atomic::Ordering::Relaxed);
+                event_loop.exit();
+            }
+            WindowEvent::Resized(new_size) => {
+                self.handle_resize(new_size);
+            }
+            WindowEvent::KeyboardInput { event, .. } => {
+                self.handle_keyboard_input(&event);
+            }
+            WindowEvent::ModifiersChanged(modifiers) => {
+                self.modifiers = modifiers.state();
+            }
+            WindowEvent::MouseWheel { delta, .. } => {
+                self.handle_mouse_wheel(delta);
+            }
+            WindowEvent::RedrawRequested => {
+                if let Some(renderer) = &mut self.renderer {
+                    match renderer.render(&self.grid, &self.grid.styles) {
+                        Ok(_) => {}
+                        Err(wgpu::SurfaceError::Lost) => {
+                            renderer.resize(renderer.size());
+                        }
+                        Err(wgpu::SurfaceError::OutOfMemory) => {
+                            log::error!("Out of memory");
+                            event_loop.exit();
+                        }
+                        Err(e) => {
+                            log::error!("Render error: {:?}", e);
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
+        // Process incoming commands
+        self.process_commands();
+
+        // Process buffered input
+        self.process_input();
+
+        // Request redraw
+        if let Some(window) = &self.window {
+            window.request_redraw();
         }
     }
 }

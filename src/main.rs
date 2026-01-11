@@ -6,7 +6,7 @@ use tokio::sync::broadcast::{Receiver, Sender};
 
 use crate::{
     commands::ServerCommand,
-    ui::{EguiRunner, Runner},
+    ui::{WgpuRunner, Runner},
 };
 
 pub mod app;
@@ -14,6 +14,7 @@ pub mod commands;
 pub mod config;
 pub mod fonts;
 pub mod grid;
+pub mod renderer;
 pub mod statemachine;
 pub mod styles;
 pub mod term;
@@ -52,7 +53,7 @@ fn start_ui(
     tx: &Sender<ServerCommand>,
     ui_update_receiver: &Receiver<ClientCommand>,
 ) {
-    let runner = EguiRunner {
+    let runner = WgpuRunner {
         exit_flag: exit_flag.clone(),
         config: config.clone(),
         tx: tx.clone(),
