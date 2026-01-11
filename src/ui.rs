@@ -1,6 +1,7 @@
 use std::{
     cmp::{max, min},
     sync::{atomic::AtomicBool, Arc},
+    time::{Duration, Instant},
 };
 
 use tokio::sync::broadcast::{Receiver, Sender};
@@ -53,6 +54,9 @@ impl Runner for WgpuRunner {
     }
 }
 
+/// Debounce duration for window resize events to avoid excessive grid/PTY updates
+const RESIZE_DEBOUNCE_MS: u64 = 50;
+
 pub struct WgpuApp {
     exit_flag: Arc<AtomicBool>,
     input: String,
@@ -63,6 +67,10 @@ pub struct WgpuApp {
     window: Option<Arc<Window>>,
     renderer: Option<Renderer>,
     modifiers: winit::keyboard::ModifiersState,
+    /// Pending resize to be applied after debounce period
+    pending_resize: Option<PhysicalSize<u32>>,
+    /// Deadline after which the pending resize should be applied
+    resize_deadline: Option<Instant>,
 }
 
 impl WgpuApp {
@@ -83,6 +91,8 @@ impl WgpuApp {
             window: None,
             renderer: None,
             modifiers: winit::keyboard::ModifiersState::empty(),
+            pending_resize: None,
+            resize_deadline: None,
         }
     }
 
@@ -447,9 +457,21 @@ impl WgpuApp {
     }
 
     fn handle_resize(&mut self, new_size: PhysicalSize<u32>) {
+        // Immediately resize the renderer for visual feedback
         if let Some(renderer) = &mut self.renderer {
             renderer.resize(new_size);
         }
+
+        // Debounce the expensive grid/config/server updates
+        self.pending_resize = Some(new_size);
+        self.resize_deadline = Some(Instant::now() + Duration::from_millis(RESIZE_DEBOUNCE_MS));
+    }
+
+    fn apply_pending_resize(&mut self) {
+        let Some(new_size) = self.pending_resize.take() else {
+            return;
+        };
+        self.resize_deadline = None;
 
         let new_width = new_size.width as f32;
         let new_height = new_size.height as f32;
@@ -632,6 +654,13 @@ impl ApplicationHandler for WgpuApp {
 
         // Process buffered input
         self.process_input();
+
+        // Apply debounced resize if deadline has passed
+        if let Some(deadline) = self.resize_deadline {
+            if Instant::now() >= deadline {
+                self.apply_pending_resize();
+            }
+        }
 
         // Request redraw
         if let Some(window) = &self.window {
