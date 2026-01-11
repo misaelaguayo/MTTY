@@ -86,7 +86,7 @@ impl Handler for StateMachine {
     fn goto_col(&mut self, col: usize) {
         log::debug!("Goto col: {}", col);
         self.tx
-            .send(ClientCommand::MoveCursor(0, col as i16))
+            .send(ClientCommand::MoveCursorAbsoluteHorizontal(col as i16))
             .unwrap();
     }
 

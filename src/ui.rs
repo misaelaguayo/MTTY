@@ -251,7 +251,7 @@ impl WgpuApp {
             ClientCommand::ReportCursorPosition => self.send_raw_data(
                 format!(
                     "\x1b[{};{}R",
-                    self.grid.cursor_pos.0, self.grid.cursor_pos.1
+                    self.grid.cursor_pos.0 + 1, self.grid.cursor_pos.1 + 1
                 )
                 .as_bytes()
                 .to_vec(),

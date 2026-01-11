@@ -87,8 +87,8 @@ fn set_controlling_terminal(fd: c_int) {
 impl Term {
     pub fn new(config: &Config) -> Result<Self, Error> {
         let winsize = termios::Winsize {
-            ws_row: config.rows - 1,
-            ws_col: config.cols - 1,
+            ws_row: config.rows,
+            ws_col: config.cols,
             ws_xpixel: config.width as u16,
             ws_ypixel: config.height as u16,
         };
@@ -319,8 +319,8 @@ pub fn resize_terminal(fd: BorrowedFd, cols: u16, rows: u16, width: u16, height:
         height
     );
     let winsize = termios::Winsize {
-        ws_row: rows - 1,
-        ws_col: cols - 1,
+        ws_row: rows,
+        ws_col: cols,
         ws_xpixel: width,
         ws_ypixel: height,
     };
