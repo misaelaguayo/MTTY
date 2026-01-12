@@ -11,6 +11,24 @@ use wgpu::{
 };
 use winit::{dpi::PhysicalSize, window::Window};
 
+/// Detect if running under WSL2 by checking for WSL-specific indicators
+fn is_wsl2() -> bool {
+    // Check for WSL-specific environment variable
+    if std::env::var("WSL_DISTRO_NAME").is_ok() {
+        return true;
+    }
+
+    // Check /proc/version for Microsoft/WSL indicators
+    if let Ok(version) = std::fs::read_to_string("/proc/version") {
+        let version_lower = version.to_lowercase();
+        if version_lower.contains("microsoft") || version_lower.contains("wsl") {
+            return true;
+        }
+    }
+
+    false
+}
+
 use crate::{
     config::Config,
     grid::Grid,
@@ -68,24 +86,71 @@ impl Renderer {
         let font_size = config.font_size;
 
         // Create wgpu instance
+        // On WSL2, check for display server availability
+        if is_wsl2() {
+            let display_set = std::env::var("DISPLAY").is_ok() && !std::env::var("DISPLAY").unwrap_or_default().is_empty();
+            let wayland_set = std::env::var("WAYLAND_DISPLAY").is_ok() && !std::env::var("WAYLAND_DISPLAY").unwrap_or_default().is_empty();
+
+            if !display_set && !wayland_set {
+                log::error!("WSL2 detected but no display server found (DISPLAY and WAYLAND_DISPLAY are unset)");
+                log::error!("Please ensure WSLg is enabled: run 'wsl --update' from Windows and restart WSL");
+                log::error!("Or set DISPLAY if using an X server like VcXsrv");
+                panic!("No display server available. WSL2 requires WSLg or an X server for GUI applications. \
+                       Run 'wsl --update' from Windows PowerShell and restart WSL with 'wsl --shutdown'.");
+            }
+            log::info!("WSL2 detected, DISPLAY={:?}, WAYLAND_DISPLAY={:?}",
+                std::env::var("DISPLAY").ok(),
+                std::env::var("WAYLAND_DISPLAY").ok());
+        }
+
+        // On WSL2, try Vulkan first (native WSLg support), then GL as fallback
+        let backends = if is_wsl2() {
+            log::info!("WSL2 detected, trying Vulkan and GL backends");
+            Backends::VULKAN | Backends::GL
+        } else {
+            Backends::all()
+        };
+
         let instance = Instance::new(&InstanceDescriptor {
-            backends: Backends::all(),
+            backends,
             ..Default::default()
         });
 
-        // Create surface
-        let surface = instance.create_surface(window.clone()).unwrap();
+        // Create surface with better error handling
+        let surface = instance.create_surface(window.clone()).unwrap_or_else(|e| {
+            log::error!("Failed to create surface: {:?}", e);
+            if is_wsl2() {
+                panic!("Surface creation failed on WSL2. Ensure WSLg is properly configured: \
+                       1. Run 'wsl --update' from Windows PowerShell \
+                       2. Restart WSL with 'wsl --shutdown' \
+                       3. Ensure your GPU drivers are up to date on Windows");
+            } else {
+                panic!("Failed to create rendering surface: {:?}", e);
+            }
+        });
 
         // Request adapter and device
         let (adapter, device, queue) = pollster::block_on(async {
+            // In WSL2, try with fallback adapter enabled for better compatibility
+            // Also try fallback if the primary adapter request fails
             let adapter = instance
                 .request_adapter(&RequestAdapterOptions {
-                    power_preference: wgpu::PowerPreference::default(),
+                    power_preference: wgpu::PowerPreference::LowPower,
                     compatible_surface: Some(&surface),
                     force_fallback_adapter: false,
                 })
                 .await
-                .expect("Failed to find an appropriate adapter");
+                .or_else(|| {
+                    log::warn!("Primary adapter not available, trying fallback adapter");
+                    pollster::block_on(instance.request_adapter(&RequestAdapterOptions {
+                        power_preference: wgpu::PowerPreference::LowPower,
+                        compatible_surface: Some(&surface),
+                        force_fallback_adapter: true,
+                    }))
+                })
+                .expect("Failed to find an appropriate adapter. Ensure your graphics drivers are installed and up to date. On WSL2, enable GPU support with 'wsl --update'.");
+
+            log::info!("Using graphics adapter: {:?}", adapter.get_info());
 
             let (device, queue) = adapter
                 .request_device(

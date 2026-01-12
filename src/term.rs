@@ -254,6 +254,17 @@ impl Term {
             command.env("XDG_CONFIG_HOME", xdg_config);
         }
 
+        // WSL2/WSLg display variables
+        if let Ok(display) = env::var("DISPLAY") {
+            command.env("DISPLAY", display);
+        }
+        if let Ok(wayland_display) = env::var("WAYLAND_DISPLAY") {
+            command.env("WAYLAND_DISPLAY", wayland_display);
+        }
+        if let Ok(xdg_runtime_dir) = env::var("XDG_RUNTIME_DIR") {
+            command.env("XDG_RUNTIME_DIR", xdg_runtime_dir);
+        }
+
         command
     }
 
