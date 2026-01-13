@@ -205,15 +205,14 @@ impl Grid {
     }
 
     pub fn set_pos(&mut self, row: usize, col: usize) {
-        let rows = self.active_grid().len();
-        if row >= rows {
-            log::warn!(
-                "Row {} exceeds grid height {}. Adjusting to last row.",
+        let grid_rows = self.active_grid().len() / self.width as usize;
+        if row >= grid_rows {
+            log::debug!(
+                "Row {} exceeds grid rows {}. Adding rows.",
                 row,
-                rows - 1
+                grid_rows
             );
-            self.add_rows(row - rows + 1);
-            self.scroll_pos = row;
+            self.add_rows(row - grid_rows + 1);
         }
 
         // Mark old cursor row as dirty (to redraw without cursor)
@@ -221,6 +220,12 @@ impl Grid {
         self.mark_row_dirty(old_row);
 
         self.cursor_pos = (row, col);
+
+        // Auto-scroll: if cursor is below visible area, scroll to follow
+        if row > self.scroll_pos {
+            self.scroll_pos = row;
+            self.mark_all_dirty(); // Need to redraw all rows when scrolling
+        }
 
         // Mark new cursor row as dirty (to draw cursor at new position)
         self.mark_row_dirty(row);
