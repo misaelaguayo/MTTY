@@ -534,8 +534,16 @@ impl WgpuApp {
                 Ok(command) => {
                     self.handle_command(command);
                 }
-                Err(_) => {
+                Err(tokio::sync::broadcast::error::TryRecvError::Empty) => {
                     break; // No more commands to process
+                }
+                Err(tokio::sync::broadcast::error::TryRecvError::Lagged(n)) => {
+                    log::warn!("UI receiver lagged, {} messages dropped", n);
+                    // Continue processing - don't break
+                }
+                Err(tokio::sync::broadcast::error::TryRecvError::Closed) => {
+                    log::info!("Command channel closed");
+                    break;
                 }
             }
         }
