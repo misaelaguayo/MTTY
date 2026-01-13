@@ -54,14 +54,18 @@ pub fn read_from_raw_fd(fd: i32) -> Option<Vec<u8>> {
     }
 }
 
-pub fn write_to_fd(fd: BorrowedFd, data: &[u8]) {
+pub fn write_to_fd(fd: BorrowedFd, data: &[u8]) -> bool {
     let write_result = write(fd, data);
 
     match write_result {
         Ok(size) => {
             log::trace!("Wrote {} bytes", size);
+            true
         }
-        Err(e) => log::error!("Failed to write to fd: {}", e),
+        Err(e) => {
+            log::warn!("Failed to write to fd: {} (PTY may be closed)", e);
+            false
+        }
     }
 }
 
@@ -149,12 +153,23 @@ impl Term {
             loop {
                 match input_rx.recv().await {
                     Ok(ServerCommand::RawData(data)) => {
-                        write_to_fd(write_fd.as_fd(), &data);
+                        if !write_to_fd(write_fd.as_fd(), &data) {
+                            // PTY is likely closed, exit the write thread
+                            exit_flag.store(true, Ordering::Relaxed);
+                            break;
+                        }
                     }
                     Ok(ServerCommand::Resize(cols, rows, width, height)) => {
-                        resize_terminal(write_fd.as_fd(), cols, rows, width, height);
+                        if !resize_terminal(write_fd.as_fd(), cols, rows, width, height) {
+                            // PTY is likely closed, exit the write thread
+                            exit_flag.store(true, Ordering::Relaxed);
+                            break;
+                        }
                     }
-                    _ => {}
+                    Err(e) => {
+                        log::warn!("Write thread channel error: {}", e);
+                        break;
+                    }
                 }
 
                 if exit_flag.load(Ordering::Relaxed) {
@@ -321,7 +336,7 @@ fn enable_raw_mode(termios: &mut Termios) {
     termios.control_modes.remove(termios::ControlModes::CS8);
 }
 
-pub fn resize_terminal(fd: BorrowedFd, cols: u16, rows: u16, width: u16, height: u16) {
+pub fn resize_terminal(fd: BorrowedFd, cols: u16, rows: u16, width: u16, height: u16) -> bool {
     log::info!(
         "Resizing terminal to {} cols, {} rows, {} width, {} height",
         cols,
@@ -342,8 +357,11 @@ pub fn resize_terminal(fd: BorrowedFd, cols: u16, rows: u16, width: u16, height:
     };
 
     if res < 0 {
-        panic!("Failed to resize terminal: {}", Error::last_os_error());
+        let err = Error::last_os_error();
+        log::warn!("Failed to resize terminal: {} (child process may have exited)", err);
+        return false;
     }
+    true
 }
 
 unsafe fn set_nonblocking(fd: c_int) {

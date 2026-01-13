@@ -97,9 +97,9 @@ impl WgpuApp {
     }
 
     fn send_raw_data(&self, data: Vec<u8>) {
-        self.tx
-            .send(ServerCommand::RawData(data))
-            .expect("Failed to send raw data");
+        if let Err(e) = self.tx.send(ServerCommand::RawData(data)) {
+            log::warn!("Failed to send raw data: {}", e);
+        }
     }
 
     fn handle_sgr_attribute(&mut self, attribute: SgrAttribute) {
@@ -460,9 +460,25 @@ impl WgpuApp {
         // Immediately resize the renderer for visual feedback
         if let Some(renderer) = &mut self.renderer {
             renderer.resize(new_size);
+
+            let new_width = new_size.width as f32;
+            let new_height = new_size.height as f32;
+
+            // Immediately resize grid to match renderer (prevents visual artifacts)
+            let (cell_width, cell_height) = renderer.cell_dimensions();
+            let new_cols = (new_width / cell_width).floor() as u16;
+            let new_rows = (new_height / cell_height).floor() as u16;
+
+            if new_cols != self.grid.width || new_rows != self.grid.height {
+                self.grid.resize(new_cols, new_rows);
+                self.config.cols = new_cols;
+                self.config.rows = new_rows;
+                self.config.width = new_width;
+                self.config.height = new_height;
+            }
         }
 
-        // Debounce the expensive grid/config/server updates
+        // Debounce only the expensive PTY resize ioctl
         self.pending_resize = Some(new_size);
         self.resize_deadline = Some(Instant::now() + Duration::from_millis(RESIZE_DEBOUNCE_MS));
     }
@@ -473,43 +489,21 @@ impl WgpuApp {
         };
         self.resize_deadline = None;
 
-        let new_width = new_size.width as f32;
-        let new_height = new_size.height as f32;
+        // Grid and config were already updated in handle_resize
+        // Now send the debounced PTY resize command
+        log::info!(
+            "Sending PTY resize: {} cols, {} rows",
+            self.config.cols,
+            self.config.rows
+        );
 
-        if new_width != self.config.width || new_height != self.config.height {
-            log::info!(
-                "Window resized: new width = {}, new height = {}",
-                new_width,
-                new_height
-            );
-
-            self.config.width = new_width;
-            self.config.height = new_height;
-
-            // Use actual cell dimensions from renderer if available
-            let (new_cols, new_rows) = if let Some(renderer) = &self.renderer {
-                let (cell_width, cell_height) = renderer.cell_dimensions();
-                (
-                    (new_width / cell_width).floor() as u16,
-                    (new_height / cell_height).floor() as u16,
-                )
-            } else {
-                self.config.get_col_rows_from_size(new_width, new_height)
-            };
-
-            // Update grid and config dimensions
-            self.grid.resize(new_cols, new_rows);
-            self.config.cols = new_cols;
-            self.config.rows = new_rows;
-
-            self.tx
-                .send(ServerCommand::Resize(
-                    new_cols,
-                    new_rows,
-                    new_size.width as u16,
-                    new_size.height as u16,
-                ))
-                .expect("Failed to send resize command");
+        if let Err(e) = self.tx.send(ServerCommand::Resize(
+            self.config.cols,
+            self.config.rows,
+            new_size.width as u16,
+            new_size.height as u16,
+        )) {
+            log::warn!("Failed to send resize command: {}", e);
         }
     }
 
@@ -588,14 +582,14 @@ impl ApplicationHandler for WgpuApp {
                 self.grid = Grid::new(&self.config);
 
                 // Notify the PTY of the correct size
-                self.tx
-                    .send(ServerCommand::Resize(
-                        new_cols,
-                        new_rows,
-                        self.config.width as u16,
-                        self.config.height as u16,
-                    ))
-                    .expect("Failed to send resize command");
+                if let Err(e) = self.tx.send(ServerCommand::Resize(
+                    new_cols,
+                    new_rows,
+                    self.config.width as u16,
+                    self.config.height as u16,
+                )) {
+                    log::warn!("Failed to send resize command: {}", e);
+                }
             }
 
             self.window = Some(window);
@@ -648,7 +642,13 @@ impl ApplicationHandler for WgpuApp {
         }
     }
 
-    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        // Check if we should exit (e.g., shell process died)
+        if self.exit_flag.load(std::sync::atomic::Ordering::Relaxed) {
+            event_loop.exit();
+            return;
+        }
+
         // Process incoming commands
         self.process_commands();
 
