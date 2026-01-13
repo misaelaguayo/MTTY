@@ -43,14 +43,23 @@ use vte::ansi::Processor;
 // This can be done by calling read(master_fd, buffer)
 // We can also use syscalls like select or poll to wait for data on the master fd
 //
-pub fn read_from_raw_fd(fd: i32) -> Option<Vec<u8>> {
+pub enum ReadResult {
+    Data(Vec<u8>),
+    WouldBlock,
+    Eof,
+    Error,
+}
+
+pub fn read_from_raw_fd(fd: i32) -> ReadResult {
     let mut read_buffer = [0; 65536];
 
     let read_result = read(fd, &mut read_buffer);
 
     match read_result {
-        Ok(bytes_read) => Some(read_buffer[..bytes_read].to_vec()),
-        Err(_e) => None,
+        Ok(0) => ReadResult::Eof,
+        Ok(bytes_read) => ReadResult::Data(read_buffer[..bytes_read].to_vec()),
+        Err(nix::errno::Errno::EAGAIN) => ReadResult::WouldBlock,
+        Err(_e) => ReadResult::Error,
     }
 }
 
@@ -133,8 +142,20 @@ impl Term {
             let mut statemachine = statemachine::StateMachine::new(output_tx);
 
             loop {
-                if let Some(data) = read_from_raw_fd(fd) {
-                    processor.advance(&mut statemachine, &data);
+                match read_from_raw_fd(fd) {
+                    ReadResult::Data(data) => {
+                        processor.advance(&mut statemachine, &data);
+                    }
+                    ReadResult::WouldBlock => {
+                        // No data available, yield to avoid busy loop
+                        tokio::task::yield_now().await;
+                    }
+                    ReadResult::Eof | ReadResult::Error => {
+                        // Child process exited or error occurred
+                        log::info!("PTY read ended, signaling exit");
+                        read_exit_flag.store(true, Ordering::Relaxed);
+                        break;
+                    }
                 }
 
                 if read_exit_flag.load(Ordering::Relaxed) {
