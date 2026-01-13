@@ -8,6 +8,7 @@
  # Font settings
  [font]
  size = 18.0
+ family = "Hack Nerd Font"
 
  # Shell settings
  [shell]

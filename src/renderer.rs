@@ -79,6 +79,9 @@ pub struct Renderer {
     cell_width: f32,
     cell_height: f32,
 
+    // Font family name (None = system monospace)
+    font_family: Option<String>,
+
     // Per-row cached render data for incremental updates
     cached_row_bg_vertices: Vec<Vec<BgVertex>>,
     cached_row_text_spans: Vec<Vec<(String, GlyphonColor)>>,
@@ -209,12 +212,8 @@ impl Renderer {
         };
         surface.configure(&device, &surface_config);
 
-        // Initialize glyphon for text rendering
+        // Initialize glyphon for text rendering (uses system fonts)
         let mut font_system = FontSystem::new();
-
-        // Load the Hack font
-        let font_data = include_bytes!("../assets/Hack-Regular.ttf");
-        font_system.db_mut().load_font_data(font_data.to_vec());
 
         let swash_cache = SwashCache::new();
         let cache = Cache::new(&device);
@@ -228,6 +227,9 @@ impl Renderer {
 
         let viewport = Viewport::new(&device, &cache);
 
+        // Store font family from config
+        let font_family = config.font_family.clone();
+
         // Create text buffer for rendering
         let line_height = font_size * 1.2;
         let mut text_buffer = Buffer::new(&mut font_system, Metrics::new(font_size, line_height));
@@ -240,12 +242,11 @@ impl Renderer {
         // Measure actual cell width from font by shaping a character
         let mut measure_buffer =
             Buffer::new(&mut font_system, Metrics::new(font_size, line_height));
-        measure_buffer.set_text(
-            &mut font_system,
-            "M",
-            Attrs::new().family(Family::Monospace),
-            Shaping::Advanced,
-        );
+        let font_attrs = match &font_family {
+            Some(name) => Attrs::new().family(Family::Name(name)),
+            None => Attrs::new().family(Family::Monospace),
+        };
+        measure_buffer.set_text(&mut font_system, "M", font_attrs, Shaping::Advanced);
         measure_buffer.shape_until_scroll(&mut font_system, false);
 
         let cell_width = measure_buffer
@@ -257,10 +258,11 @@ impl Renderer {
         let cell_height = line_height;
 
         log::info!(
-            "Measured cell dimensions: {}x{} (font_size: {})",
+            "Measured cell dimensions: {}x{} (font_size: {}, family: {:?})",
             cell_width,
             cell_height,
-            font_size
+            font_size,
+            font_family
         );
 
         // Create background rendering pipeline
@@ -349,6 +351,7 @@ impl Renderer {
             bg_index_buffer,
             cell_width,
             cell_height,
+            font_family,
             cached_row_bg_vertices: Vec::new(),
             cached_row_text_spans: Vec::new(),
             num_cached_rows: 0,
@@ -484,20 +487,26 @@ impl Renderer {
             }
 
             // Prepare text rendering with per-character colors
-            let rich_text: Vec<(&str, Attrs)> = self.combined_text_spans
+            let rich_text: Vec<(&str, Attrs)> = self
+                .combined_text_spans
                 .iter()
                 .map(|(text, color)| {
-                    (
-                        text.as_str(),
-                        Attrs::new().family(Family::Monospace).color(*color),
-                    )
+                    let attrs = match &self.font_family {
+                        Some(name) => Attrs::new().family(Family::Name(name)).color(*color),
+                        None => Attrs::new().family(Family::Monospace).color(*color),
+                    };
+                    (text.as_str(), attrs)
                 })
                 .collect();
 
+            let default_attrs = match &self.font_family {
+                Some(name) => Attrs::new().family(Family::Name(name)),
+                None => Attrs::new().family(Family::Monospace),
+            };
             self.text_buffer.set_rich_text(
                 &mut self.font_system,
                 rich_text,
-                Attrs::new().family(Family::Monospace),
+                default_attrs,
                 Shaping::Advanced,
             );
 

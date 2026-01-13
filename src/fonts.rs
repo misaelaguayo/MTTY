@@ -1,16 +1,3 @@
-use glyphon::FontSystem;
-
-/// Creates and configures the font system with the Hack font
-pub fn create_font_system() -> FontSystem {
-    let mut font_system = FontSystem::new();
-
-    // Load the Hack font
-    let font_data = include_bytes!("../assets/Hack-Regular.ttf");
-    font_system.db_mut().load_font_data(font_data.to_vec());
-
-    font_system
-}
-
 /// Calculate cell dimensions based on font size
 /// Returns (cell_width, cell_height)
 pub fn get_cell_size(font_size: f32) -> (f32, f32) {

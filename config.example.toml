@@ -9,6 +9,9 @@ height = 600.0
 # Font settings
 [font]
 size = 16.0
+# Font family - uses system fonts. Leave unset for system monospace default.
+# Examples: "SF Mono", "Menlo", "Monaco", "Courier New", "Arial", "Helvetica"
+family = "SF Mono"
 
 # Shell settings
 [shell]

@@ -20,6 +20,7 @@ struct WindowConfig {
 #[derive(Deserialize)]
 struct FontConfig {
     size: Option<f32>,
+    family: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -34,6 +35,7 @@ pub struct Config {
     pub width: f32,
     pub height: f32,
     pub font_size: f32,
+    pub font_family: Option<String>,
     pub rows: u16,
     pub cols: u16,
     pub shell: String,
@@ -66,6 +68,7 @@ impl Default for Config {
             width: WIDTH,
             height: HEIGHT,
             font_size: FONT_SIZE,
+            font_family: None, // Use system monospace font by default
             rows,
             cols,
             shell,
@@ -140,6 +143,9 @@ impl Config {
         if let Some(font) = file_config.font {
             if let Some(size) = font.size {
                 self.font_size = size;
+            }
+            if let Some(family) = font.family {
+                self.font_family = Some(family);
             }
         }
 
