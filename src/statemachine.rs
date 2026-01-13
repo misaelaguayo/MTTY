@@ -346,11 +346,11 @@ impl Handler for StateMachine {
     }
 
     fn set_active_charset(&mut self, _: CharsetIndex) {
-        log::error!("Set active charset");
+        // Character set switching is not implemented but is harmless to ignore
     }
 
-    fn configure_charset(&mut self, c: CharsetIndex, typ: StandardCharset) {
-        log::error!("Configure charset: {:?} {:?}", c, typ);
+    fn configure_charset(&mut self, _: CharsetIndex, _: StandardCharset) {
+        // Character set configuration (e.g., G0 ASCII) is not implemented but is harmless to ignore
     }
 
     fn set_color(&mut self, i: usize, rgb: Rgb) {
