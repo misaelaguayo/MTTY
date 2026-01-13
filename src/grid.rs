@@ -54,6 +54,8 @@ pub struct Grid {
     pub saved_cursor_pos: (usize, usize),
     pub scroll_pos: usize,
     pub styles: Styles,
+    /// Dirty flag - set when grid content changes, cleared after rendering
+    dirty: bool,
 }
 
 impl Grid {
@@ -73,7 +75,23 @@ impl Grid {
             scroll_pos: height as usize - 1,
             styles: Styles::default(),
             alternate: false,
+            dirty: true,
         }
+    }
+
+    /// Returns true if the grid content has changed since last clear
+    pub fn is_dirty(&self) -> bool {
+        self.dirty
+    }
+
+    /// Clears the dirty flag (call after rendering)
+    pub fn clear_dirty(&mut self) {
+        self.dirty = false;
+    }
+
+    /// Marks the grid as dirty (content has changed)
+    fn mark_dirty(&mut self) {
+        self.dirty = true;
     }
 
     pub fn active_grid(&mut self) -> &mut Vec<Cell> {
@@ -102,6 +120,7 @@ impl Grid {
         self.alternate = !self.alternate;
         // Reset scroll position when switching screens
         self.scroll_pos = self.height as usize - 1;
+        self.mark_dirty();
     }
 
     pub fn resize(&mut self, new_cols: u16, new_rows: u16) {
@@ -117,6 +136,7 @@ impl Grid {
         // Reset positions
         self.scroll_pos = new_rows as usize - 1;
         self.cursor_pos = (0, 0);
+        self.mark_dirty();
     }
 
     pub fn pretty_print(&mut self) {
@@ -159,6 +179,7 @@ impl Grid {
         }
 
         self.cursor_pos = (row, col);
+        self.mark_dirty();
     }
 
     pub fn add_rows(&mut self, rows: usize) {
@@ -175,6 +196,7 @@ impl Grid {
                 self.active_grid().push(Cell::new(' ', fg, bg));
             }
         }
+        self.mark_dirty();
     }
 
     pub fn place_character_in_grid(&mut self, cols: u16, c: char) {
@@ -208,6 +230,7 @@ impl Grid {
                 }
                 self.active_grid()[index] = Cell::new(c, fg, bg);
                 self.set_pos(row, col + 1);
+                self.mark_dirty();
             }
         }
     }
@@ -232,6 +255,7 @@ impl Grid {
 
         self.scroll_pos = 0;
         self.cursor_pos = (0, 0);
+        self.mark_dirty();
     }
 
     pub fn delete_character(&mut self) {
@@ -254,14 +278,17 @@ impl Grid {
         } else if row > 0 {
             self.set_pos(row - 1, cols - 1);
         }
+        self.mark_dirty();
     }
 
     pub fn show_cursor(&mut self) {
         self.styles.cursor_state.hidden = false;
+        self.mark_dirty();
     }
 
     pub fn hide_cursor(&mut self) {
         self.styles.cursor_state.hidden = true;
+        self.mark_dirty();
     }
 
     pub fn save_cursor(&mut self) {

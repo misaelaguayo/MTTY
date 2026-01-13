@@ -147,8 +147,8 @@ impl Term {
                         processor.advance(&mut statemachine, &data);
                     }
                     ReadResult::WouldBlock => {
-                        // No data available, yield to avoid busy loop
-                        tokio::task::yield_now().await;
+                        // No data available, sleep briefly to avoid busy-looping
+                        tokio::time::sleep(std::time::Duration::from_micros(100)).await;
                     }
                     ReadResult::Eof | ReadResult::Error => {
                         // Child process exited or error occurred

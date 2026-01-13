@@ -78,6 +78,12 @@ pub struct Renderer {
     // Cell dimensions
     cell_width: f32,
     cell_height: f32,
+
+    // Cached render data to avoid reshaping when content unchanged
+    cached_bg_vertices: Vec<BgVertex>,
+    cached_bg_indices: Vec<u32>,
+    cached_text_spans: Vec<(String, GlyphonColor)>,
+    cache_valid: bool,
 }
 
 impl Renderer {
@@ -310,6 +316,10 @@ impl Renderer {
             bg_index_buffer,
             cell_width,
             cell_height,
+            cached_bg_vertices: Vec::new(),
+            cached_bg_indices: Vec::new(),
+            cached_text_spans: Vec::new(),
+            cache_valid: false,
         }
     }
 
@@ -343,6 +353,9 @@ impl Renderer {
                 usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,
             });
+
+            // Invalidate cache on resize
+            self.cache_valid = false;
         }
     }
 
@@ -354,49 +367,63 @@ impl Renderer {
         (self.cell_width, self.cell_height)
     }
 
-    pub fn render(&mut self, grid: &Grid, styles: &Styles) -> Result<(), wgpu::SurfaceError> {
+    pub fn render(&mut self, grid: &mut Grid) -> Result<(), wgpu::SurfaceError> {
         let output = self.surface.get_current_texture()?;
         let view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        // Build background vertices and text content
-        let (bg_vertices, bg_indices, text_spans) = self.build_render_data(grid, styles);
+        // Only rebuild render data and reshape text if grid content changed
+        let needs_rebuild = grid.is_dirty() || !self.cache_valid;
 
-        // Upload background data
-        if !bg_vertices.is_empty() {
-            self.queue.write_buffer(
-                &self.bg_vertex_buffer,
-                0,
-                bytemuck::cast_slice(&bg_vertices),
+        if needs_rebuild {
+            // Build background vertices and text content
+            let (bg_vertices, bg_indices, text_spans) = self.build_render_data(grid);
+
+            // Cache the data
+            self.cached_bg_vertices = bg_vertices;
+            self.cached_bg_indices = bg_indices;
+            self.cached_text_spans = text_spans;
+            self.cache_valid = true;
+
+            // Upload background data
+            if !self.cached_bg_vertices.is_empty() {
+                self.queue.write_buffer(
+                    &self.bg_vertex_buffer,
+                    0,
+                    bytemuck::cast_slice(&self.cached_bg_vertices),
+                );
+                self.queue.write_buffer(
+                    &self.bg_index_buffer,
+                    0,
+                    bytemuck::cast_slice(&self.cached_bg_indices),
+                );
+            }
+
+            // Prepare text rendering with per-character colors
+            let rich_text: Vec<(&str, Attrs)> = self.cached_text_spans
+                .iter()
+                .map(|(text, color)| {
+                    (
+                        text.as_str(),
+                        Attrs::new().family(Family::Monospace).color(*color),
+                    )
+                })
+                .collect();
+
+            self.text_buffer.set_rich_text(
+                &mut self.font_system,
+                rich_text,
+                Attrs::new().family(Family::Monospace),
+                Shaping::Advanced,
             );
-            self.queue.write_buffer(
-                &self.bg_index_buffer,
-                0,
-                bytemuck::cast_slice(&bg_indices),
-            );
+
+            // Shape the text to calculate glyph positions
+            self.text_buffer.shape_until_scroll(&mut self.font_system, false);
+
+            // Clear the dirty flag now that we've processed the changes
+            grid.clear_dirty();
         }
-
-        // Prepare text rendering with per-character colors
-        let rich_text: Vec<(&str, Attrs)> = text_spans
-            .iter()
-            .map(|(text, color)| {
-                (
-                    text.as_str(),
-                    Attrs::new().family(Family::Monospace).color(*color),
-                )
-            })
-            .collect();
-
-        self.text_buffer.set_rich_text(
-            &mut self.font_system,
-            rich_text,
-            Attrs::new().family(Family::Monospace),
-            Shaping::Advanced,
-        );
-
-        // Shape the text to calculate glyph positions
-        self.text_buffer.shape_until_scroll(&mut self.font_system, false);
 
         self.viewport.update(
             &self.queue,
@@ -438,7 +465,7 @@ impl Renderer {
             });
 
         // Convert default background color to wgpu::Color for clearing
-        let default_bg = color_to_rgba(styles.default_background_color, styles);
+        let default_bg = color_to_rgba(grid.styles.default_background_color, &grid.styles);
         let clear_color = wgpu::Color {
             r: default_bg[0] as f64,
             g: default_bg[1] as f64,
@@ -463,14 +490,14 @@ impl Renderer {
             });
 
             // Render backgrounds
-            if !bg_indices.is_empty() {
+            if !self.cached_bg_indices.is_empty() {
                 render_pass.set_pipeline(&self.bg_pipeline);
                 render_pass.set_vertex_buffer(0, self.bg_vertex_buffer.slice(..));
                 render_pass.set_index_buffer(
                     self.bg_index_buffer.slice(..),
                     wgpu::IndexFormat::Uint32,
                 );
-                render_pass.draw_indexed(0..bg_indices.len() as u32, 0, 0..1);
+                render_pass.draw_indexed(0..self.cached_bg_indices.len() as u32, 0, 0..1);
             }
 
             // Render text
@@ -491,8 +518,8 @@ impl Renderer {
     fn build_render_data(
         &self,
         grid: &Grid,
-        styles: &Styles,
     ) -> (Vec<BgVertex>, Vec<u32>, Vec<(String, GlyphonColor)>) {
+        let styles = &grid.styles;
         let mut bg_vertices = Vec::new();
         let mut bg_indices = Vec::new();
         let mut text_spans: Vec<(String, GlyphonColor)> = Vec::new();

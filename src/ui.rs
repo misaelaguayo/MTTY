@@ -41,7 +41,8 @@ pub struct WgpuRunner {
 impl Runner for WgpuRunner {
     fn run(self) {
         let event_loop = EventLoop::new().expect("Failed to create event loop");
-        event_loop.set_control_flow(ControlFlow::Poll);
+        // Use Wait instead of Poll to reduce CPU usage when idle
+        event_loop.set_control_flow(ControlFlow::Wait);
 
         let mut app = WgpuApp::new(
             &self.config,
@@ -648,7 +649,7 @@ impl ApplicationHandler for WgpuApp {
             }
             WindowEvent::RedrawRequested => {
                 if let Some(renderer) = &mut self.renderer {
-                    match renderer.render(&self.grid, &self.grid.styles) {
+                    match renderer.render(&mut self.grid) {
                         Ok(_) => {}
                         Err(wgpu::SurfaceError::Lost) => {
                             renderer.resize(renderer.size());
@@ -687,9 +688,17 @@ impl ApplicationHandler for WgpuApp {
             }
         }
 
-        // Request redraw
-        if let Some(window) = &self.window {
-            window.request_redraw();
+        // Only request redraw when content has changed
+        if self.grid.is_dirty() {
+            if let Some(window) = &self.window {
+                window.request_redraw();
+            }
         }
+
+        // Always use WaitUntil to avoid busy-looping - never use Poll
+        // 8ms gives ~120fps max which is responsive enough for typing
+        event_loop.set_control_flow(ControlFlow::WaitUntil(
+            Instant::now() + Duration::from_millis(8)
+        ));
     }
 }
