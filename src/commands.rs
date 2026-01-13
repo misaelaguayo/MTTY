@@ -122,6 +122,9 @@ pub enum ClientCommand {
     ScrollUp(i16),
     ScrollDown(i16),
     SetScrollingRegion(usize, Option<usize>),
+    ReverseIndex,
+    InsertBlanks(i16),
+    DeleteChars(i16),
     SetCursorState(CursorState),
     SetCursorShape(CursorShape),
 }

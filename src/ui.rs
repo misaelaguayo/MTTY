@@ -395,6 +395,15 @@ impl WgpuApp {
             ClientCommand::SetScrollingRegion(top, bottom) => {
                 self.grid.set_scroll_region(top, bottom);
             }
+            ClientCommand::ReverseIndex => {
+                self.grid.reverse_index();
+            }
+            ClientCommand::InsertBlanks(count) => {
+                self.grid.insert_blanks(count as usize);
+            }
+            ClientCommand::DeleteChars(count) => {
+                self.grid.delete_chars(count as usize);
+            }
             _ => {
                 log::info!("Unsupported command: {:?}", command);
             }

@@ -88,7 +88,8 @@ impl Handler for StateMachine {
     }
 
     fn insert_blank(&mut self, count: usize) {
-        log::error!("Insert blank: {}", count);
+        log::debug!("Insert blank: {}", count);
+        self.send(ClientCommand::InsertBlanks(count as i16));
     }
 
     fn move_up(&mut self, u: usize) {
@@ -219,8 +220,9 @@ impl Handler for StateMachine {
         self.send(ClientCommand::ClearCount(c as i16));
     }
 
-    fn delete_chars(&mut self, _: usize) {
-        log::error!("Delete chars");
+    fn delete_chars(&mut self, count: usize) {
+        log::debug!("Delete chars: {}", count);
+        self.send(ClientCommand::DeleteChars(count as i16));
     }
 
     fn move_backward_tabs(&mut self, _count: u16) {
@@ -288,7 +290,8 @@ impl Handler for StateMachine {
     }
 
     fn reverse_index(&mut self) {
-        log::error!("Reverse index");
+        log::debug!("Reverse index");
+        self.send(ClientCommand::ReverseIndex);
     }
 
     fn terminal_attribute(&mut self, attr: Attr) {

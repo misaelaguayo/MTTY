@@ -591,4 +591,87 @@ impl Grid {
 
         self.mark_all_dirty();
     }
+
+    /// Reverse index - move cursor up one line, scroll down if at top of scroll region
+    pub fn reverse_index(&mut self) {
+        let (row, col) = self.cursor_pos;
+        let (top, _) = self.scroll_region;
+
+        if row == top {
+            // At top of scroll region, scroll content down
+            self.scroll_down(1);
+        } else if row > 0 {
+            // Move cursor up
+            self.set_pos(row - 1, col);
+        }
+    }
+
+    /// Insert blank characters at cursor, shifting existing chars to the right
+    pub fn insert_blanks(&mut self, count: usize) {
+        let (row, col) = self.cursor_pos;
+        let width = self.width as usize;
+
+        let (fg, bg) = if self.styles.reverse {
+            (self.styles.active_background_color, self.styles.active_text_color)
+        } else {
+            (self.styles.active_text_color, self.styles.active_background_color)
+        };
+
+        let grid = self.active_grid();
+        let row_start = row * width;
+        let row_end = row_start + width;
+
+        // Shift characters to the right
+        for i in (col + count..width).rev() {
+            let dest_idx = row_start + i;
+            let src_idx = row_start + i - count;
+            if dest_idx < row_end && src_idx < row_end && dest_idx < grid.len() && src_idx < grid.len() {
+                grid[dest_idx] = grid[src_idx].clone();
+            }
+        }
+
+        // Fill with blanks at cursor position
+        for i in col..(col + count).min(width) {
+            let idx = row_start + i;
+            if idx < grid.len() {
+                grid[idx] = Cell::new(' ', fg, bg);
+            }
+        }
+
+        self.mark_row_dirty(row);
+    }
+
+    /// Delete characters at cursor, shifting remaining chars left
+    pub fn delete_chars(&mut self, count: usize) {
+        let (row, col) = self.cursor_pos;
+        let width = self.width as usize;
+
+        let (fg, bg) = if self.styles.reverse {
+            (self.styles.active_background_color, self.styles.active_text_color)
+        } else {
+            (self.styles.active_text_color, self.styles.active_background_color)
+        };
+
+        let grid = self.active_grid();
+        let row_start = row * width;
+
+        // Shift characters to the left
+        for i in col..(width - count) {
+            let dest_idx = row_start + i;
+            let src_idx = row_start + i + count;
+            if dest_idx < grid.len() && src_idx < grid.len() {
+                grid[dest_idx] = grid[src_idx].clone();
+            }
+        }
+
+        // Fill end of line with blanks
+        for i in (width - count)..width {
+            let idx = row_start + i;
+            if idx < grid.len() {
+                grid[idx] = Cell::new(' ', fg, bg);
+            }
+        }
+
+        self.mark_row_dirty(row);
+    }
 }
