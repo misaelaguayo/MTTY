@@ -194,16 +194,19 @@ impl Handler for StateMachine {
         log::error!("Set horizontal tabstop");
     }
 
-    fn scroll_up(&mut self, _: usize) {
-        log::error!("Scroll up");
+    fn scroll_up(&mut self, count: usize) {
+        log::debug!("Scroll up: {}", count);
+        self.send(ClientCommand::ScrollUp(count as i16));
     }
 
-    fn scroll_down(&mut self, _: usize) {
-        log::error!("Scroll down");
+    fn scroll_down(&mut self, count: usize) {
+        log::debug!("Scroll down: {}", count);
+        self.send(ClientCommand::ScrollDown(count as i16));
     }
 
-    fn insert_blank_lines(&mut self, _: usize) {
-        log::error!("Insert blank lines");
+    fn insert_blank_lines(&mut self, count: usize) {
+        log::debug!("Insert blank lines: {}", count);
+        self.send(ClientCommand::InsertBlankLines(count as i16));
     }
 
     fn delete_lines(&mut self, l: usize) {
@@ -352,7 +355,8 @@ impl Handler for StateMachine {
     }
 
     fn set_scrolling_region(&mut self, top: usize, bottom: Option<usize>) {
-        log::error!("Set scrolling region: {} {:?}", top, bottom);
+        log::debug!("Set scrolling region: {} {:?}", top, bottom);
+        self.send(ClientCommand::SetScrollingRegion(top, bottom));
     }
 
     fn set_keypad_application_mode(&mut self) {

@@ -419,6 +419,18 @@ impl WgpuApp {
             ClientCommand::BracketedPasteMode(enabled) => {
                 self.bracketed_paste_mode = enabled;
             }
+            ClientCommand::ScrollUp(count) => {
+                self.grid.scroll_up(count as usize);
+            }
+            ClientCommand::ScrollDown(count) => {
+                self.grid.scroll_down(count as usize);
+            }
+            ClientCommand::InsertBlankLines(count) => {
+                self.grid.insert_blank_lines(count as usize);
+            }
+            ClientCommand::SetScrollingRegion(top, bottom) => {
+                self.grid.set_scroll_region(top, bottom);
+            }
             _ => {
                 log::info!("Unsupported command: {:?}", command);
             }

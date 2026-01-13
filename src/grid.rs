@@ -60,6 +60,8 @@ pub struct Grid {
     dirty_count: usize,
     /// Previous cursor position for tracking cursor movement
     prev_cursor_pos: (usize, usize),
+    /// Scrolling region (top row, bottom row) - 0-indexed, inclusive
+    scroll_region: (usize, usize),
 }
 
 impl Grid {
@@ -84,6 +86,7 @@ impl Grid {
             dirty_rows,
             dirty_count: height as usize, // All rows start dirty
             prev_cursor_pos: (0, 0),
+            scroll_region: (0, height as usize - 1),
         }
     }
 
@@ -172,9 +175,10 @@ impl Grid {
         self.dirty_rows = vec![true; new_rows as usize];
         self.dirty_count = new_rows as usize;
 
-        // Reset positions
+        // Reset positions and scroll region
         self.scroll_pos = new_rows as usize - 1;
         self.cursor_pos = (0, 0);
+        self.scroll_region = (0, new_rows as usize - 1);
     }
 
     pub fn pretty_print(&mut self) {
@@ -370,5 +374,108 @@ impl Grid {
 
     pub fn restore_cursor(&mut self) {
         self.cursor_pos = self.saved_cursor_pos;
+    }
+
+    /// Set the scrolling region (1-indexed from terminal, converted to 0-indexed)
+    pub fn set_scroll_region(&mut self, top: usize, bottom: Option<usize>) {
+        // Terminal uses 1-indexed, convert to 0-indexed
+        let top = top.saturating_sub(1);
+        let bottom = bottom.map(|b| b.saturating_sub(1)).unwrap_or(self.height as usize - 1);
+        self.scroll_region = (top, bottom.min(self.height as usize - 1));
+        // Move cursor to home position when scroll region is set
+        self.set_pos(0, 0);
+    }
+
+    /// Scroll content up within the scroll region (content moves up, blank lines appear at bottom)
+    pub fn scroll_up(&mut self, count: usize) {
+        let (top, bottom) = self.scroll_region;
+        let width = self.width as usize;
+
+        let (fg, bg) = if self.styles.reverse {
+            (self.styles.active_background_color, self.styles.active_text_color)
+        } else {
+            (self.styles.active_text_color, self.styles.active_background_color)
+        };
+
+        for _ in 0..count {
+            // Remove the top row of the scroll region
+            let start_idx = top * width;
+            let grid = self.active_grid();
+            if start_idx + width <= grid.len() {
+                grid.drain(start_idx..start_idx + width);
+            }
+
+            // Insert a blank row at the bottom of the scroll region
+            let insert_idx = bottom * width;
+            let grid = self.active_grid();
+            let insert_idx = insert_idx.min(grid.len());
+            for i in 0..width {
+                grid.insert(insert_idx + i, Cell::new(' ', fg, bg));
+            }
+        }
+
+        self.mark_all_dirty();
+    }
+
+    /// Scroll content down within the scroll region (content moves down, blank lines appear at top)
+    pub fn scroll_down(&mut self, count: usize) {
+        let (top, bottom) = self.scroll_region;
+        let width = self.width as usize;
+
+        let (fg, bg) = if self.styles.reverse {
+            (self.styles.active_background_color, self.styles.active_text_color)
+        } else {
+            (self.styles.active_text_color, self.styles.active_background_color)
+        };
+
+        for _ in 0..count {
+            // Remove the bottom row of the scroll region
+            let start_idx = bottom * width;
+            let grid = self.active_grid();
+            if start_idx + width <= grid.len() {
+                grid.drain(start_idx..start_idx + width);
+            }
+
+            // Insert a blank row at the top of the scroll region
+            let insert_idx = top * width;
+            let grid = self.active_grid();
+            for i in 0..width {
+                grid.insert(insert_idx + i, Cell::new(' ', fg, bg));
+            }
+        }
+
+        self.mark_all_dirty();
+    }
+
+    /// Insert blank lines at cursor position within scroll region
+    pub fn insert_blank_lines(&mut self, count: usize) {
+        let (row, _) = self.cursor_pos;
+        let (_, bottom) = self.scroll_region;
+        let width = self.width as usize;
+
+        let (fg, bg) = if self.styles.reverse {
+            (self.styles.active_background_color, self.styles.active_text_color)
+        } else {
+            (self.styles.active_text_color, self.styles.active_background_color)
+        };
+
+        for _ in 0..count {
+            // Remove the bottom row of the scroll region
+            let remove_idx = bottom * width;
+            let grid = self.active_grid();
+            if remove_idx + width <= grid.len() {
+                grid.drain(remove_idx..remove_idx + width);
+            }
+
+            // Insert a blank row at the cursor position
+            let insert_idx = row * width;
+            let grid = self.active_grid();
+            let insert_idx = insert_idx.min(grid.len());
+            for i in 0..width {
+                grid.insert(insert_idx + i, Cell::new(' ', fg, bg));
+            }
+        }
+
+        self.mark_all_dirty();
     }
 }

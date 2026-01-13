@@ -118,6 +118,10 @@ pub enum ClientCommand {
     ShowCursor,
     SwapScreenAndSetRestoreCursor,
     DeleteLines(i16),
+    InsertBlankLines(i16),
+    ScrollUp(i16),
+    ScrollDown(i16),
+    SetScrollingRegion(usize, Option<usize>),
     SetCursorState(CursorState),
     SetCursorShape(CursorShape),
 }
