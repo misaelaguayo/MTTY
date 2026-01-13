@@ -268,16 +268,20 @@ impl WgpuApp {
             }
             ClientCommand::PutTab => {
                 let (row, col) = self.grid.cursor_pos;
-                if col < self.grid.width as usize - 5 {
+                let grid_len = self.grid.active_grid().len();
+                let width = self.grid.width as usize;
+                if col < width.saturating_sub(5) {
                     let (fg, bg) = if self.grid.styles.reverse {
                         (self.grid.styles.active_background_color, self.grid.styles.active_text_color)
                     } else {
                         (self.grid.styles.active_text_color, self.grid.styles.active_background_color)
                     };
                     for i in col..col + 4 {
-                        let index = row * (self.grid.width as usize) + i;
-                        self.grid.active_grid()[index] = Cell::new(' ', fg, bg);
-                        self.grid.set_pos(row, i + 1);
+                        let index = row * width + i;
+                        if index < grid_len {
+                            self.grid.active_grid()[index] = Cell::new(' ', fg, bg);
+                            self.grid.set_pos(row, i + 1);
+                        }
                     }
                 }
             }
@@ -319,27 +323,31 @@ impl WgpuApp {
                 let width = self.grid.width as usize;
                 let height = self.grid.height as usize;
                 let count = count as usize;
-                let (fg, bg) = if self.grid.styles.reverse {
-                    (self.grid.styles.active_background_color, self.grid.styles.active_text_color)
-                } else {
-                    (self.grid.styles.active_text_color, self.grid.styles.active_background_color)
-                };
 
-                // Delete lines at cursor position by shifting lines up
-                let start_idx = row * width;
-                let lines_to_delete = std::cmp::min(count, height - row);
+                // Bounds check - row must be within height
+                if row < height {
+                    let (fg, bg) = if self.grid.styles.reverse {
+                        (self.grid.styles.active_background_color, self.grid.styles.active_text_color)
+                    } else {
+                        (self.grid.styles.active_text_color, self.grid.styles.active_background_color)
+                    };
 
-                // Remove the lines
-                let remove_count = lines_to_delete * width;
-                let grid = self.grid.active_grid();
-                if start_idx + remove_count <= grid.len() {
-                    grid.drain(start_idx..start_idx + remove_count);
-                }
+                    // Delete lines at cursor position by shifting lines up
+                    let start_idx = row * width;
+                    let lines_to_delete = std::cmp::min(count, height.saturating_sub(row));
 
-                // Add blank lines at the bottom to maintain grid size
-                for _ in 0..lines_to_delete {
-                    for _ in 0..width {
-                        self.grid.active_grid().push(Cell::new(' ', fg, bg));
+                    // Remove the lines
+                    let remove_count = lines_to_delete * width;
+                    let grid = self.grid.active_grid();
+                    if start_idx + remove_count <= grid.len() {
+                        grid.drain(start_idx..start_idx + remove_count);
+                    }
+
+                    // Add blank lines at the bottom to maintain grid size
+                    for _ in 0..lines_to_delete {
+                        for _ in 0..width {
+                            self.grid.active_grid().push(Cell::new(' ', fg, bg));
+                        }
                     }
                 }
             }
@@ -356,8 +364,17 @@ impl WgpuApp {
     }
 
     fn clear_cells(&mut self, row: usize, col_range: std::ops::Range<usize>) {
-        let start_index = row * (self.grid.width as usize) + col_range.start;
-        let end_index = row * (self.grid.width as usize) + col_range.end;
+        let grid_len = self.grid.active_grid().len();
+        let width = self.grid.width as usize;
+
+        let start_index = row * width + col_range.start;
+        let end_index = row * width + col_range.end;
+
+        // Bounds check to prevent panics after resize
+        if start_index >= grid_len {
+            return;
+        }
+        let end_index = std::cmp::min(end_index, grid_len);
 
         let (fg, bg) = if self.grid.styles.reverse {
             (self.grid.styles.active_background_color, self.grid.styles.active_text_color)
