@@ -369,43 +369,7 @@ impl WgpuApp {
                 self.grid.hide_cursor();
             }
             ClientCommand::DeleteLines(count) => {
-                let (row, _) = self.grid.cursor_pos;
-                let width = self.grid.width as usize;
-                let height = self.grid.height as usize;
-                let count = count as usize;
-
-                // Bounds check - row must be within height
-                if row < height {
-                    let (fg, bg) = if self.grid.styles.reverse {
-                        (
-                            self.grid.styles.active_background_color,
-                            self.grid.styles.active_text_color,
-                        )
-                    } else {
-                        (
-                            self.grid.styles.active_text_color,
-                            self.grid.styles.active_background_color,
-                        )
-                    };
-
-                    // Delete lines at cursor position by shifting lines up
-                    let start_idx = row * width;
-                    let lines_to_delete = std::cmp::min(count, height.saturating_sub(row));
-
-                    // Remove the lines
-                    let remove_count = lines_to_delete * width;
-                    let grid = self.grid.active_grid();
-                    if start_idx + remove_count <= grid.len() {
-                        grid.drain(start_idx..start_idx + remove_count);
-                    }
-
-                    // Add blank lines at the bottom to maintain grid size
-                    for _ in 0..lines_to_delete {
-                        for _ in 0..width {
-                            self.grid.active_grid().push(Cell::new(' ', fg, bg));
-                        }
-                    }
-                }
+                self.grid.delete_lines(count as usize);
             }
             ClientCommand::SetCursorState(state) => {
                 self.grid.styles.cursor_state = state;
@@ -479,7 +443,6 @@ impl WgpuApp {
                 return;
             }
             PhysicalKey::Code(KeyCode::Escape) => {
-                self.grid.pretty_print();
                 self.send_raw_data(vec![27]);
                 return;
             }

@@ -390,6 +390,13 @@ impl Grid {
     pub fn scroll_up(&mut self, count: usize) {
         let (top, bottom) = self.scroll_region;
         let width = self.width as usize;
+        let region_height = bottom - top + 1;
+
+        if count >= region_height {
+            // Clear the entire scroll region
+            self.clear_scroll_region();
+            return;
+        }
 
         let (fg, bg) = if self.styles.reverse {
             (self.styles.active_background_color, self.styles.active_text_color)
@@ -397,20 +404,26 @@ impl Grid {
             (self.styles.active_text_color, self.styles.active_background_color)
         };
 
-        for _ in 0..count {
-            // Remove the top row of the scroll region
-            let start_idx = top * width;
-            let grid = self.active_grid();
-            if start_idx + width <= grid.len() {
-                grid.drain(start_idx..start_idx + width);
-            }
+        let grid = self.active_grid();
 
-            // Insert a blank row at the bottom of the scroll region
-            let insert_idx = bottom * width;
-            let grid = self.active_grid();
-            let insert_idx = insert_idx.min(grid.len());
-            for i in 0..width {
-                grid.insert(insert_idx + i, Cell::new(' ', fg, bg));
+        // Move rows up within the region
+        for row in top..(bottom - count + 1) {
+            let dest_idx = row * width;
+            let src_idx = (row + count) * width;
+            for col in 0..width {
+                if src_idx + col < grid.len() && dest_idx + col < grid.len() {
+                    grid[dest_idx + col] = grid[src_idx + col].clone();
+                }
+            }
+        }
+
+        // Clear the bottom rows
+        for row in (bottom - count + 1)..=bottom {
+            let start_idx = row * width;
+            for col in 0..width {
+                if start_idx + col < grid.len() {
+                    grid[start_idx + col] = Cell::new(' ', fg, bg);
+                }
             }
         }
 
@@ -421,6 +434,13 @@ impl Grid {
     pub fn scroll_down(&mut self, count: usize) {
         let (top, bottom) = self.scroll_region;
         let width = self.width as usize;
+        let region_height = bottom - top + 1;
+
+        if count >= region_height {
+            // Clear the entire scroll region
+            self.clear_scroll_region();
+            return;
+        }
 
         let (fg, bg) = if self.styles.reverse {
             (self.styles.active_background_color, self.styles.active_text_color)
@@ -428,19 +448,50 @@ impl Grid {
             (self.styles.active_text_color, self.styles.active_background_color)
         };
 
-        for _ in 0..count {
-            // Remove the bottom row of the scroll region
-            let start_idx = bottom * width;
-            let grid = self.active_grid();
-            if start_idx + width <= grid.len() {
-                grid.drain(start_idx..start_idx + width);
-            }
+        let grid = self.active_grid();
 
-            // Insert a blank row at the top of the scroll region
-            let insert_idx = top * width;
-            let grid = self.active_grid();
-            for i in 0..width {
-                grid.insert(insert_idx + i, Cell::new(' ', fg, bg));
+        // Move rows down within the region (iterate from bottom to avoid overwriting)
+        for row in ((top + count)..=bottom).rev() {
+            let dest_idx = row * width;
+            let src_idx = (row - count) * width;
+            for col in 0..width {
+                if src_idx + col < grid.len() && dest_idx + col < grid.len() {
+                    grid[dest_idx + col] = grid[src_idx + col].clone();
+                }
+            }
+        }
+
+        // Clear the top rows
+        for row in top..(top + count) {
+            let start_idx = row * width;
+            for col in 0..width {
+                if start_idx + col < grid.len() {
+                    grid[start_idx + col] = Cell::new(' ', fg, bg);
+                }
+            }
+        }
+
+        self.mark_all_dirty();
+    }
+
+    /// Clear the entire scroll region
+    fn clear_scroll_region(&mut self) {
+        let (top, bottom) = self.scroll_region;
+        let width = self.width as usize;
+
+        let (fg, bg) = if self.styles.reverse {
+            (self.styles.active_background_color, self.styles.active_text_color)
+        } else {
+            (self.styles.active_text_color, self.styles.active_background_color)
+        };
+
+        let grid = self.active_grid();
+        for row in top..=bottom {
+            let start_idx = row * width;
+            for col in 0..width {
+                if start_idx + col < grid.len() {
+                    grid[start_idx + col] = Cell::new(' ', fg, bg);
+                }
             }
         }
 
@@ -450,8 +501,16 @@ impl Grid {
     /// Insert blank lines at cursor position within scroll region
     pub fn insert_blank_lines(&mut self, count: usize) {
         let (row, _) = self.cursor_pos;
-        let (_, bottom) = self.scroll_region;
+        let (top, bottom) = self.scroll_region;
         let width = self.width as usize;
+
+        // Only operate if cursor is within scroll region
+        if row < top || row > bottom {
+            return;
+        }
+
+        let region_height = bottom - row + 1;
+        let count = count.min(region_height);
 
         let (fg, bg) = if self.styles.reverse {
             (self.styles.active_background_color, self.styles.active_text_color)
@@ -459,20 +518,74 @@ impl Grid {
             (self.styles.active_text_color, self.styles.active_background_color)
         };
 
-        for _ in 0..count {
-            // Remove the bottom row of the scroll region
-            let remove_idx = bottom * width;
-            let grid = self.active_grid();
-            if remove_idx + width <= grid.len() {
-                grid.drain(remove_idx..remove_idx + width);
-            }
+        let grid = self.active_grid();
 
-            // Insert a blank row at the cursor position
-            let insert_idx = row * width;
-            let grid = self.active_grid();
-            let insert_idx = insert_idx.min(grid.len());
-            for i in 0..width {
-                grid.insert(insert_idx + i, Cell::new(' ', fg, bg));
+        // Move rows down from cursor position (iterate from bottom to avoid overwriting)
+        for dest_row in ((row + count)..=bottom).rev() {
+            let src_row = dest_row - count;
+            let dest_idx = dest_row * width;
+            let src_idx = src_row * width;
+            for col in 0..width {
+                if src_idx + col < grid.len() && dest_idx + col < grid.len() {
+                    grid[dest_idx + col] = grid[src_idx + col].clone();
+                }
+            }
+        }
+
+        // Clear the rows at cursor position
+        for r in row..(row + count).min(bottom + 1) {
+            let start_idx = r * width;
+            for col in 0..width {
+                if start_idx + col < grid.len() {
+                    grid[start_idx + col] = Cell::new(' ', fg, bg);
+                }
+            }
+        }
+
+        self.mark_all_dirty();
+    }
+
+    /// Delete lines at cursor position within scroll region (content moves up)
+    pub fn delete_lines(&mut self, count: usize) {
+        let (row, _) = self.cursor_pos;
+        let (top, bottom) = self.scroll_region;
+        let width = self.width as usize;
+
+        // Only operate if cursor is within scroll region
+        if row < top || row > bottom {
+            return;
+        }
+
+        let region_height = bottom - row + 1;
+        let count = count.min(region_height);
+
+        let (fg, bg) = if self.styles.reverse {
+            (self.styles.active_background_color, self.styles.active_text_color)
+        } else {
+            (self.styles.active_text_color, self.styles.active_background_color)
+        };
+
+        let grid = self.active_grid();
+
+        // Move rows up from cursor position
+        for src_row in (row + count)..=bottom {
+            let dest_row = src_row - count;
+            let dest_idx = dest_row * width;
+            let src_idx = src_row * width;
+            for col in 0..width {
+                if src_idx + col < grid.len() && dest_idx + col < grid.len() {
+                    grid[dest_idx + col] = grid[src_idx + col].clone();
+                }
+            }
+        }
+
+        // Clear the bottom rows
+        for r in (bottom - count + 1)..=bottom {
+            let start_idx = r * width;
+            for col in 0..width {
+                if start_idx + col < grid.len() {
+                    grid[start_idx + col] = Cell::new(' ', fg, bg);
+                }
             }
         }
 
