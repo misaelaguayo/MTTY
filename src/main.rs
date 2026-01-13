@@ -35,7 +35,7 @@ async fn main() -> Result<(), std::io::Error> {
         })
         .init();
 
-    let app = app::App::new(Config::default(), Arc::new(AtomicBool::new(false)));
+    let app = app::App::new(Config::load(), Arc::new(AtomicBool::new(false)));
 
     start_ui(
         &app.config,

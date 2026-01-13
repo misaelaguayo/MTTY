@@ -109,7 +109,7 @@ impl Term {
         let pty = openpty(None, Some(&winsize)).expect("Failed to open pty");
         let (master, slave) = (pty.controller, pty.user);
 
-        Self::from_fd(master, slave)
+        Self::from_fd(master, slave, &config.shell, &config.shell_args)
     }
 
     pub fn init(
@@ -200,7 +200,12 @@ impl Term {
         });
     }
 
-    fn from_fd(master: OwnedFd, slave: OwnedFd) -> Result<Term, Error> {
+    fn from_fd(
+        master: OwnedFd,
+        slave: OwnedFd,
+        shell: &str,
+        shell_args: &[String],
+    ) -> Result<Term, Error> {
         let master_fd = master.as_raw_fd();
         let slave_fd = slave.as_raw_fd();
         if let Ok(mut termios) = termios::tcgetattr(&master) {
@@ -211,7 +216,7 @@ impl Term {
             let _ = termios::tcsetattr(&master, OptionalActions::Now, &termios);
         }
 
-        let mut builder = Self::default_shell_command();
+        let mut builder = Self::build_shell_command(shell, shell_args);
 
         builder.stdin(slave.try_clone()?);
         builder.stdout(slave.try_clone()?);
@@ -260,14 +265,16 @@ impl Term {
         }
     }
 
-    #[cfg(target_os = "linux")]
-    fn default_shell_command() -> Command {
-        let shell = env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
+    /// Build shell command with the given shell program and arguments
+    fn build_shell_command(shell: &str, shell_args: &[String]) -> Command {
+        log::info!("Starting shell: {} with args: {:?}", shell, shell_args);
 
-        let mut command = Command::new(&shell);
+        let mut command = Command::new(shell);
 
-        // Use -l to run as login shell, which loads profile files
-        command.arg("-l");
+        // Add shell arguments
+        for arg in shell_args {
+            command.arg(arg);
+        }
 
         // Set essential environment variables
         command.env("TERM", "xterm-256color");
@@ -290,7 +297,7 @@ impl Term {
             command.env("XDG_CONFIG_HOME", xdg_config);
         }
 
-        // WSL2/WSLg display variables
+        // WSL2/WSLg display variables (Linux-specific but harmless on macOS)
         if let Ok(display) = env::var("DISPLAY") {
             command.env("DISPLAY", display);
         }
@@ -299,40 +306,6 @@ impl Term {
         }
         if let Ok(xdg_runtime_dir) = env::var("XDG_RUNTIME_DIR") {
             command.env("XDG_RUNTIME_DIR", xdg_runtime_dir);
-        }
-
-        command
-    }
-
-    #[cfg(target_os = "macos")]
-    fn default_shell_command() -> Command {
-        let shell = env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string());
-
-        // Launch shell as a login shell (with "-" prefix or -l flag)
-        let mut command = Command::new(&shell);
-
-        // Use -l to run as login shell, which loads profile files
-        command.arg("-l");
-
-        // Set essential environment variables
-        command.env("TERM", "xterm-256color");
-        command.env("COLORTERM", "truecolor");
-
-        // Preserve important environment variables
-        if let Ok(home) = env::var("HOME") {
-            command.env("HOME", home);
-        }
-        if let Ok(user) = env::var("USER") {
-            command.env("USER", user);
-        }
-        if let Ok(path) = env::var("PATH") {
-            command.env("PATH", path);
-        }
-        if let Ok(lang) = env::var("LANG") {
-            command.env("LANG", lang);
-        }
-        if let Ok(xdg_config) = env::var("XDG_CONFIG_HOME") {
-            command.env("XDG_CONFIG_HOME", xdg_config);
         }
 
         command

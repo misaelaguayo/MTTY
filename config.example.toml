@@ -1,0 +1,18 @@
+# MTTY Configuration File
+# Place this file at ~/.config/mtty/config.toml
+
+# Window settings
+[window]
+width = 800.0
+height = 600.0
+
+# Font settings
+[font]
+size = 16.0
+
+# Shell settings
+[shell]
+# The shell program to run (defaults to $SHELL or platform default)
+program = "/bin/zsh"
+# Arguments to pass to the shell (defaults to ["-l"] for login shell)
+args = ["-l"]

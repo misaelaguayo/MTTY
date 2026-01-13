@@ -1,0 +1,17 @@
+ # MTTY Configuration File
+
+ # Window settings
+ [window]
+ width = 2000.0
+ height = 1200.0
+
+ # Font settings
+ [font]
+ size = 18.0
+
+ # Shell settings
+ [shell]
+ # The shell program to run (defaults to $SHELL or platform default)
+ program = "/Users/misaelaguayo/.nix-profile/bin/nu"
+ # Arguments to pass to the shell (defaults to ["-l"] for login shell)
+ args = ["-l"]
