@@ -99,10 +99,7 @@ impl Config {
                     }
                 }
             } else {
-                log::info!(
-                    "No config file found at {:?}, using defaults",
-                    config_path
-                );
+                log::info!("No config file found at {:?}, using defaults", config_path);
             }
         }
 

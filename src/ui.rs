@@ -58,6 +58,39 @@ impl Runner for WgpuRunner {
 /// Debounce duration for window resize events to avoid excessive grid/PTY updates
 const RESIZE_DEBOUNCE_MS: u64 = 50;
 
+/// Debug information displayed as an overlay
+pub struct DebugInfo {
+    /// Whether to show debug overlay (toggled with Ctrl+Shift+I)
+    pub show: bool,
+    /// Last time FPS was calculated
+    last_update: Instant,
+    /// Frame count since last FPS update
+    frame_count: u32,
+    /// Current FPS value
+    pub fps: f32,
+}
+
+impl DebugInfo {
+    fn new() -> Self {
+        Self {
+            show: false,
+            last_update: Instant::now(),
+            frame_count: 0,
+            fps: 0.0,
+        }
+    }
+
+    fn update(&mut self) {
+        self.frame_count += 1;
+        let elapsed = self.last_update.elapsed();
+        if elapsed >= Duration::from_secs(1) {
+            self.fps = self.frame_count as f32 / elapsed.as_secs_f32();
+            self.frame_count = 0;
+            self.last_update = Instant::now();
+        }
+    }
+}
+
 pub struct WgpuApp {
     exit_flag: Arc<AtomicBool>,
     input: String,
@@ -72,6 +105,8 @@ pub struct WgpuApp {
     pending_resize: Option<PhysicalSize<u32>>,
     /// Deadline after which the pending resize should be applied
     resize_deadline: Option<Instant>,
+    /// Debug overlay information
+    debug_info: DebugInfo,
 }
 
 impl WgpuApp {
@@ -94,6 +129,7 @@ impl WgpuApp {
             modifiers: winit::keyboard::ModifiersState::empty(),
             pending_resize: None,
             resize_deadline: None,
+            debug_info: DebugInfo::new(),
         }
     }
 
@@ -454,6 +490,18 @@ impl WgpuApp {
             _ => {}
         }
 
+        // Handle Ctrl+Shift+I to toggle debug overlay
+        if self.modifiers.control_key() && self.modifiers.shift_key() {
+            if let PhysicalKey::Code(KeyCode::KeyI) = event.physical_key {
+                self.debug_info.show = !self.debug_info.show;
+                // Request redraw to show/hide the overlay
+                if let Some(window) = &self.window {
+                    window.request_redraw();
+                }
+                return;
+            }
+        }
+
         // Handle Ctrl+key combinations using physical key codes
         if self.modifiers.control_key() {
             match event.physical_key {
@@ -671,8 +719,10 @@ impl ApplicationHandler for WgpuApp {
             }
             WindowEvent::RedrawRequested => {
                 if let Some(renderer) = &mut self.renderer {
-                    match renderer.render(&mut self.grid) {
-                        Ok(_) => {}
+                    match renderer.render(&mut self.grid, &self.debug_info) {
+                        Ok(_) => {
+                            self.debug_info.update();
+                        }
                         Err(wgpu::SurfaceError::Lost) => {
                             renderer.resize(renderer.size());
                         }
@@ -710,8 +760,8 @@ impl ApplicationHandler for WgpuApp {
             }
         }
 
-        // Only request redraw when content has changed
-        if self.grid.is_dirty() {
+        // Request redraw when content has changed or debug overlay is shown (for FPS updates)
+        if self.grid.is_dirty() || self.debug_info.show {
             if let Some(window) = &self.window {
                 window.request_redraw();
             }

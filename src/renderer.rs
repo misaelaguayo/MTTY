@@ -33,6 +33,7 @@ use crate::{
     config::Config,
     grid::Grid,
     styles::{Color, Styles},
+    ui::DebugInfo,
 };
 
 #[repr(C)]
@@ -69,6 +70,9 @@ pub struct Renderer {
     text_renderer: TextRenderer,
     viewport: Viewport,
     text_buffer: Buffer,
+
+    // FPS overlay text buffer
+    fps_buffer: Buffer,
 
     // Background rendering
     bg_pipeline: RenderPipeline,
@@ -239,6 +243,9 @@ impl Renderer {
             Some(size.height as f32),
         );
 
+        // Create FPS overlay buffer
+        let fps_buffer = Buffer::new(&mut font_system, Metrics::new(font_size, line_height));
+
         // Measure actual cell width from font by shaping a character
         let mut measure_buffer =
             Buffer::new(&mut font_system, Metrics::new(font_size, line_height));
@@ -346,6 +353,7 @@ impl Renderer {
             text_renderer,
             viewport,
             text_buffer,
+            fps_buffer,
             bg_pipeline,
             bg_vertex_buffer,
             bg_index_buffer,
@@ -414,7 +422,11 @@ impl Renderer {
         (self.cell_width, self.cell_height)
     }
 
-    pub fn render(&mut self, grid: &mut Grid) -> Result<(), wgpu::SurfaceError> {
+    pub fn render(
+        &mut self,
+        grid: &mut Grid,
+        debug_info: &DebugInfo,
+    ) -> Result<(), wgpu::SurfaceError> {
         let output = self.surface.get_current_texture()?;
         let view = output
             .texture
@@ -448,7 +460,8 @@ impl Renderer {
 
             for row_idx in 0..num_visible_rows {
                 // Add background vertices
-                self.combined_bg_vertices.extend_from_slice(&self.cached_row_bg_vertices[row_idx]);
+                self.combined_bg_vertices
+                    .extend_from_slice(&self.cached_row_bg_vertices[row_idx]);
 
                 // Each row's indices need to be offset by the current vertex count
                 let row_vertex_count = self.cached_row_bg_vertices[row_idx].len() as u32;
@@ -466,7 +479,8 @@ impl Renderer {
                 vertex_offset += row_vertex_count;
 
                 // Add text spans (clone needed for glyphon)
-                self.combined_text_spans.extend(self.cached_row_text_spans[row_idx].iter().cloned());
+                self.combined_text_spans
+                    .extend(self.cached_row_text_spans[row_idx].iter().cloned());
             }
 
             // Store index count for draw call
@@ -526,30 +540,87 @@ impl Renderer {
             },
         );
 
-        self.text_renderer
-            .prepare(
-                &self.device,
-                &self.queue,
+        // Prepare FPS overlay if debug mode is enabled
+        if debug_info.show {
+            let fps_text = format!("{:.1}", debug_info.fps);
+            let fps_attrs = match &self.font_family {
+                Some(name) => Attrs::new()
+                    .family(Family::Name(name))
+                    .color(GlyphonColor::rgb(0, 255, 0)),
+                None => Attrs::new()
+                    .family(Family::Monospace)
+                    .color(GlyphonColor::rgb(0, 255, 0)),
+            };
+            self.fps_buffer.set_text(
                 &mut self.font_system,
-                &mut self.text_atlas,
-                &self.viewport,
-                [TextArea {
-                    buffer: &self.text_buffer,
-                    left: 0.0,
-                    top: 0.0,
-                    scale: 1.0,
-                    bounds: TextBounds {
-                        left: 0,
-                        top: 0,
-                        right: self.size.width as i32,
-                        bottom: self.size.height as i32,
-                    },
-                    default_color: GlyphonColor::rgb(255, 255, 255),
-                    custom_glyphs: &[],
-                }],
-                &mut self.swash_cache,
-            )
-            .unwrap();
+                &fps_text,
+                fps_attrs,
+                Shaping::Advanced,
+            );
+            self.fps_buffer
+                .shape_until_scroll(&mut self.font_system, false);
+        }
+
+        // Calculate FPS text position (top-right corner)
+        let fps_width = 100.0; // Approximate width for FPS text
+        let fps_left = self.size.width as f32 - fps_width;
+
+        // Build text areas
+        let main_text_area = TextArea {
+            buffer: &self.text_buffer,
+            left: 0.0,
+            top: 0.0,
+            scale: 1.0,
+            bounds: TextBounds {
+                left: 0,
+                top: 0,
+                right: self.size.width as i32,
+                bottom: self.size.height as i32,
+            },
+            default_color: GlyphonColor::rgb(255, 255, 255),
+            custom_glyphs: &[],
+        };
+
+        let fps_text_area = TextArea {
+            buffer: &self.fps_buffer,
+            left: fps_left,
+            top: 4.0,
+            scale: 1.0,
+            bounds: TextBounds {
+                left: fps_left as i32,
+                top: 0,
+                right: self.size.width as i32,
+                bottom: self.size.height as i32,
+            },
+            default_color: GlyphonColor::rgb(0, 255, 0),
+            custom_glyphs: &[],
+        };
+
+        if debug_info.show {
+            self.text_renderer
+                .prepare(
+                    &self.device,
+                    &self.queue,
+                    &mut self.font_system,
+                    &mut self.text_atlas,
+                    &self.viewport,
+                    [main_text_area, fps_text_area],
+                    &mut self.swash_cache,
+                )
+                .unwrap();
+        } else {
+            self.text_renderer
+                .prepare(
+                    &self.device,
+                    &self.queue,
+                    &mut self.font_system,
+                    &mut self.text_atlas,
+                    &self.viewport,
+                    [main_text_area],
+                    &mut self.swash_cache,
+                )
+                .unwrap();
+        }
 
         let mut encoder = self
             .device

@@ -207,11 +207,7 @@ impl Grid {
     pub fn set_pos(&mut self, row: usize, col: usize) {
         let grid_rows = self.active_grid().len() / self.width as usize;
         if row >= grid_rows {
-            log::debug!(
-                "Row {} exceeds grid rows {}. Adding rows.",
-                row,
-                grid_rows
-            );
+            log::debug!("Row {} exceeds grid rows {}. Adding rows.", row, grid_rows);
             self.add_rows(row - grid_rows + 1);
         }
 
