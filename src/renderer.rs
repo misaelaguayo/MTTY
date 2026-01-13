@@ -85,6 +85,10 @@ pub struct Renderer {
     num_cached_rows: usize,
     // Current number of indices for draw call
     current_bg_index_count: u32,
+    // Reusable combined buffers to avoid allocations
+    combined_bg_vertices: Vec<BgVertex>,
+    combined_bg_indices: Vec<u32>,
+    combined_text_spans: Vec<(String, GlyphonColor)>,
 }
 
 impl Renderer {
@@ -349,6 +353,9 @@ impl Renderer {
             cached_row_text_spans: Vec::new(),
             num_cached_rows: 0,
             current_bg_index_count: 0,
+            combined_bg_vertices: Vec::with_capacity(max_cells * 4),
+            combined_bg_indices: Vec::with_capacity(max_cells * 6),
+            combined_text_spans: Vec::with_capacity(1000),
         }
     }
 
@@ -390,6 +397,9 @@ impl Renderer {
             self.cached_row_text_spans.clear();
             self.num_cached_rows = 0;
             self.current_bg_index_count = 0;
+            self.combined_bg_vertices.clear();
+            self.combined_bg_indices.clear();
+            self.combined_text_spans.clear();
         }
     }
 
@@ -427,57 +437,54 @@ impl Renderer {
             // Build render data only for dirty rows
             self.build_render_data_incremental(grid, dirty_rows);
 
-            // Combine all row data into final buffers
-            let mut bg_vertices = Vec::new();
-            let mut bg_indices = Vec::new();
-            let mut text_spans = Vec::new();
+            // Clear and reuse combined buffers
+            self.combined_bg_vertices.clear();
+            self.combined_bg_indices.clear();
+            self.combined_text_spans.clear();
             let mut vertex_offset = 0u32;
 
             for row_idx in 0..num_visible_rows {
-                // Add background vertices with adjusted indices
-                for vertex in &self.cached_row_bg_vertices[row_idx] {
-                    bg_vertices.push(*vertex);
-                }
+                // Add background vertices
+                self.combined_bg_vertices.extend_from_slice(&self.cached_row_bg_vertices[row_idx]);
+
                 // Each row's indices need to be offset by the current vertex count
                 let row_vertex_count = self.cached_row_bg_vertices[row_idx].len() as u32;
                 // Generate indices for quads (4 vertices per quad, 6 indices per quad)
                 let num_quads = row_vertex_count / 4;
                 for quad in 0..num_quads {
                     let base = vertex_offset + quad * 4;
-                    bg_indices.push(base);
-                    bg_indices.push(base + 1);
-                    bg_indices.push(base + 2);
-                    bg_indices.push(base);
-                    bg_indices.push(base + 2);
-                    bg_indices.push(base + 3);
+                    self.combined_bg_indices.push(base);
+                    self.combined_bg_indices.push(base + 1);
+                    self.combined_bg_indices.push(base + 2);
+                    self.combined_bg_indices.push(base);
+                    self.combined_bg_indices.push(base + 2);
+                    self.combined_bg_indices.push(base + 3);
                 }
                 vertex_offset += row_vertex_count;
 
-                // Add text spans
-                for span in &self.cached_row_text_spans[row_idx] {
-                    text_spans.push(span.clone());
-                }
+                // Add text spans (clone needed for glyphon)
+                self.combined_text_spans.extend(self.cached_row_text_spans[row_idx].iter().cloned());
             }
 
             // Store index count for draw call
-            self.current_bg_index_count = bg_indices.len() as u32;
+            self.current_bg_index_count = self.combined_bg_indices.len() as u32;
 
             // Upload background data
-            if !bg_vertices.is_empty() {
+            if !self.combined_bg_vertices.is_empty() {
                 self.queue.write_buffer(
                     &self.bg_vertex_buffer,
                     0,
-                    bytemuck::cast_slice(&bg_vertices),
+                    bytemuck::cast_slice(&self.combined_bg_vertices),
                 );
                 self.queue.write_buffer(
                     &self.bg_index_buffer,
                     0,
-                    bytemuck::cast_slice(&bg_indices),
+                    bytemuck::cast_slice(&self.combined_bg_indices),
                 );
             }
 
             // Prepare text rendering with per-character colors
-            let rich_text: Vec<(&str, Attrs)> = text_spans
+            let rich_text: Vec<(&str, Attrs)> = self.combined_text_spans
                 .iter()
                 .map(|(text, color)| {
                     (

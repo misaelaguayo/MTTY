@@ -56,6 +56,8 @@ pub struct Grid {
     pub styles: Styles,
     /// Row-level dirty tracking - each element indicates if that row needs re-rendering
     dirty_rows: Vec<bool>,
+    /// Count of dirty rows for O(1) is_dirty() check
+    dirty_count: usize,
     /// Previous cursor position for tracking cursor movement
     prev_cursor_pos: (usize, usize),
 }
@@ -80,13 +82,14 @@ impl Grid {
             styles: Styles::default(),
             alternate: false,
             dirty_rows,
+            dirty_count: height as usize, // All rows start dirty
             prev_cursor_pos: (0, 0),
         }
     }
 
-    /// Returns true if any row has changed since last clear
+    /// Returns true if any row has changed since last clear (O(1))
     pub fn is_dirty(&self) -> bool {
-        self.dirty_rows.iter().any(|&d| d)
+        self.dirty_count > 0
     }
 
     /// Returns the dirty state of all rows
@@ -99,6 +102,7 @@ impl Grid {
         for dirty in &mut self.dirty_rows {
             *dirty = false;
         }
+        self.dirty_count = 0;
         self.prev_cursor_pos = self.cursor_pos;
     }
 
@@ -108,8 +112,9 @@ impl Grid {
         let start_row = self.scroll_pos.saturating_sub(self.height as usize - 1);
         if row >= start_row {
             let display_row = row - start_row;
-            if display_row < self.dirty_rows.len() {
+            if display_row < self.dirty_rows.len() && !self.dirty_rows[display_row] {
                 self.dirty_rows[display_row] = true;
+                self.dirty_count += 1;
             }
         }
     }
@@ -117,7 +122,10 @@ impl Grid {
     /// Marks all rows as dirty (for operations like screen clear, resize, swap)
     fn mark_all_dirty(&mut self) {
         for dirty in &mut self.dirty_rows {
-            *dirty = true;
+            if !*dirty {
+                *dirty = true;
+                self.dirty_count += 1;
+            }
         }
     }
 
@@ -160,8 +168,9 @@ impl Grid {
         self.cells = vec![Cell::default(); new_size];
         self.alternate_screen = vec![Cell::default(); new_size];
 
-        // Resize dirty_rows to match new height
+        // Resize dirty_rows to match new height (all dirty)
         self.dirty_rows = vec![true; new_rows as usize];
+        self.dirty_count = new_rows as usize;
 
         // Reset positions
         self.scroll_pos = new_rows as usize - 1;
