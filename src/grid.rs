@@ -54,8 +54,10 @@ pub struct Grid {
     pub saved_cursor_pos: (usize, usize),
     pub scroll_pos: usize,
     pub styles: Styles,
-    /// Dirty flag - set when grid content changes, cleared after rendering
-    dirty: bool,
+    /// Row-level dirty tracking - each element indicates if that row needs re-rendering
+    dirty_rows: Vec<bool>,
+    /// Previous cursor position for tracking cursor movement
+    prev_cursor_pos: (usize, usize),
 }
 
 impl Grid {
@@ -64,6 +66,8 @@ impl Grid {
         let height = config.rows;
         let cells = vec![Cell::default(); (width as usize) * (height as usize)];
         let alternate_screen = vec![Cell::default(); (width as usize) * (height as usize)];
+        // Start with all rows dirty to force initial render
+        let dirty_rows = vec![true; height as usize];
 
         Self {
             width,
@@ -75,23 +79,46 @@ impl Grid {
             scroll_pos: height as usize - 1,
             styles: Styles::default(),
             alternate: false,
-            dirty: true,
+            dirty_rows,
+            prev_cursor_pos: (0, 0),
         }
     }
 
-    /// Returns true if the grid content has changed since last clear
+    /// Returns true if any row has changed since last clear
     pub fn is_dirty(&self) -> bool {
-        self.dirty
+        self.dirty_rows.iter().any(|&d| d)
     }
 
-    /// Clears the dirty flag (call after rendering)
+    /// Returns the dirty state of all rows
+    pub fn dirty_rows(&self) -> &[bool] {
+        &self.dirty_rows
+    }
+
+    /// Clears all dirty flags (call after rendering)
     pub fn clear_dirty(&mut self) {
-        self.dirty = false;
+        for dirty in &mut self.dirty_rows {
+            *dirty = false;
+        }
+        self.prev_cursor_pos = self.cursor_pos;
     }
 
-    /// Marks the grid as dirty (content has changed)
-    fn mark_dirty(&mut self) {
-        self.dirty = true;
+    /// Marks a specific row as dirty
+    fn mark_row_dirty(&mut self, row: usize) {
+        // Convert absolute row to dirty_rows index based on current scroll position
+        let start_row = self.scroll_pos.saturating_sub(self.height as usize - 1);
+        if row >= start_row {
+            let display_row = row - start_row;
+            if display_row < self.dirty_rows.len() {
+                self.dirty_rows[display_row] = true;
+            }
+        }
+    }
+
+    /// Marks all rows as dirty (for operations like screen clear, resize, swap)
+    fn mark_all_dirty(&mut self) {
+        for dirty in &mut self.dirty_rows {
+            *dirty = true;
+        }
     }
 
     pub fn active_grid(&mut self) -> &mut Vec<Cell> {
@@ -120,7 +147,7 @@ impl Grid {
         self.alternate = !self.alternate;
         // Reset scroll position when switching screens
         self.scroll_pos = self.height as usize - 1;
-        self.mark_dirty();
+        self.mark_all_dirty();
     }
 
     pub fn resize(&mut self, new_cols: u16, new_rows: u16) {
@@ -133,10 +160,12 @@ impl Grid {
         self.cells = vec![Cell::default(); new_size];
         self.alternate_screen = vec![Cell::default(); new_size];
 
+        // Resize dirty_rows to match new height
+        self.dirty_rows = vec![true; new_rows as usize];
+
         // Reset positions
         self.scroll_pos = new_rows as usize - 1;
         self.cursor_pos = (0, 0);
-        self.mark_dirty();
     }
 
     pub fn pretty_print(&mut self) {
@@ -178,17 +207,29 @@ impl Grid {
             self.scroll_pos = row;
         }
 
+        // Mark old cursor row as dirty (to redraw without cursor)
+        let old_row = self.cursor_pos.0;
+        self.mark_row_dirty(old_row);
+
         self.cursor_pos = (row, col);
-        self.mark_dirty();
+
+        // Mark new cursor row as dirty (to draw cursor at new position)
+        self.mark_row_dirty(row);
     }
 
     pub fn add_rows(&mut self, rows: usize) {
         let cols = self.width;
         // Apply reverse video mode - swap fg and bg
         let (fg, bg) = if self.styles.reverse {
-            (self.styles.active_background_color, self.styles.active_text_color)
+            (
+                self.styles.active_background_color,
+                self.styles.active_text_color,
+            )
         } else {
-            (self.styles.active_text_color, self.styles.active_background_color)
+            (
+                self.styles.active_text_color,
+                self.styles.active_background_color,
+            )
         };
 
         for _ in 0..rows {
@@ -196,7 +237,8 @@ impl Grid {
                 self.active_grid().push(Cell::new(' ', fg, bg));
             }
         }
-        self.mark_dirty();
+        // Adding rows typically means scrolling, mark all visible rows dirty
+        self.mark_all_dirty();
     }
 
     pub fn place_character_in_grid(&mut self, cols: u16, c: char) {
@@ -209,9 +251,15 @@ impl Grid {
         (row, col) = self.cursor_pos;
         // Apply reverse video mode - swap fg and bg
         let (fg, bg) = if self.styles.reverse {
-            (self.styles.active_background_color, self.styles.active_text_color)
+            (
+                self.styles.active_background_color,
+                self.styles.active_text_color,
+            )
         } else {
-            (self.styles.active_text_color, self.styles.active_background_color)
+            (
+                self.styles.active_text_color,
+                self.styles.active_background_color,
+            )
         };
 
         match c {
@@ -229,8 +277,9 @@ impl Grid {
                     self.add_rows(row - (active_grid_len / (self.width as usize)) + 1);
                 }
                 self.active_grid()[index] = Cell::new(c, fg, bg);
+                // Mark the specific row as dirty
+                self.mark_row_dirty(row);
                 self.set_pos(row, col + 1);
-                self.mark_dirty();
             }
         }
     }
@@ -238,9 +287,15 @@ impl Grid {
     pub fn clear_screen(&mut self) {
         // Apply reverse video mode - swap fg and bg
         let (fg, bg) = if self.styles.reverse {
-            (self.styles.active_background_color, self.styles.active_text_color)
+            (
+                self.styles.active_background_color,
+                self.styles.active_text_color,
+            )
         } else {
-            (self.styles.active_text_color, self.styles.active_background_color)
+            (
+                self.styles.active_text_color,
+                self.styles.active_background_color,
+            )
         };
 
         // Clear out any rows which may have been added
@@ -255,7 +310,7 @@ impl Grid {
 
         self.scroll_pos = 0;
         self.cursor_pos = (0, 0);
-        self.mark_dirty();
+        self.mark_all_dirty();
     }
 
     pub fn delete_character(&mut self) {
@@ -263,9 +318,15 @@ impl Grid {
         let cols = self.width as usize;
         // Apply reverse video mode - swap fg and bg
         let (fg, bg) = if self.styles.reverse {
-            (self.styles.active_background_color, self.styles.active_text_color)
+            (
+                self.styles.active_background_color,
+                self.styles.active_text_color,
+            )
         } else {
-            (self.styles.active_text_color, self.styles.active_background_color)
+            (
+                self.styles.active_text_color,
+                self.styles.active_background_color,
+            )
         };
 
         let index = row * (self.width as usize) + col;
@@ -273,22 +334,24 @@ impl Grid {
             self.active_grid()[index] = Cell::new(' ', fg, bg);
         }
 
+        // Mark current row dirty
+        self.mark_row_dirty(row);
+
         if col > 0 {
             self.set_pos(row, col - 1);
         } else if row > 0 {
             self.set_pos(row - 1, cols - 1);
         }
-        self.mark_dirty();
     }
 
     pub fn show_cursor(&mut self) {
         self.styles.cursor_state.hidden = false;
-        self.mark_dirty();
+        self.mark_row_dirty(self.cursor_pos.0);
     }
 
     pub fn hide_cursor(&mut self) {
         self.styles.cursor_state.hidden = true;
-        self.mark_dirty();
+        self.mark_row_dirty(self.cursor_pos.0);
     }
 
     pub fn save_cursor(&mut self) {

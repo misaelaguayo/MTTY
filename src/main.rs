@@ -6,7 +6,7 @@ use tokio::sync::broadcast::{Receiver, Sender};
 
 use crate::{
     commands::ServerCommand,
-    ui::{WgpuRunner, Runner},
+    ui::{Runner, WgpuRunner},
 };
 
 pub mod app;

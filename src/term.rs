@@ -350,9 +350,7 @@ fn enable_raw_mode(termios: &mut Termios) {
     termios.output_modes.remove(termios::OutputModes::OPOST);
     // Keep ISIG enabled so Ctrl+C generates SIGINT, Ctrl+Z generates SIGTSTP, etc.
     termios.local_modes.remove(
-        termios::LocalModes::ECHO
-            | termios::LocalModes::ICANON
-            | termios::LocalModes::IEXTEN,
+        termios::LocalModes::ECHO | termios::LocalModes::ICANON | termios::LocalModes::IEXTEN,
     );
     termios.control_modes.remove(termios::ControlModes::CS8);
 }
@@ -379,7 +377,10 @@ pub fn resize_terminal(fd: BorrowedFd, cols: u16, rows: u16, width: u16, height:
 
     if res < 0 {
         let err = Error::last_os_error();
-        log::warn!("Failed to resize terminal: {} (child process may have exited)", err);
+        log::warn!(
+            "Failed to resize terminal: {} (child process may have exited)",
+            err
+        );
         return false;
     }
     true

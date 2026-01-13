@@ -79,11 +79,12 @@ pub struct Renderer {
     cell_width: f32,
     cell_height: f32,
 
-    // Cached render data to avoid reshaping when content unchanged
-    cached_bg_vertices: Vec<BgVertex>,
-    cached_bg_indices: Vec<u32>,
-    cached_text_spans: Vec<(String, GlyphonColor)>,
-    cache_valid: bool,
+    // Per-row cached render data for incremental updates
+    cached_row_bg_vertices: Vec<Vec<BgVertex>>,
+    cached_row_text_spans: Vec<Vec<(String, GlyphonColor)>>,
+    num_cached_rows: usize,
+    // Current number of indices for draw call
+    current_bg_index_count: u32,
 }
 
 impl Renderer {
@@ -94,8 +95,12 @@ impl Renderer {
         // Create wgpu instance
         // On WSL2, check for display server availability
         if is_wsl2() {
-            let display_set = std::env::var("DISPLAY").is_ok() && !std::env::var("DISPLAY").unwrap_or_default().is_empty();
-            let wayland_set = std::env::var("WAYLAND_DISPLAY").is_ok() && !std::env::var("WAYLAND_DISPLAY").unwrap_or_default().is_empty();
+            let display_set = std::env::var("DISPLAY").is_ok()
+                && !std::env::var("DISPLAY").unwrap_or_default().is_empty();
+            let wayland_set = std::env::var("WAYLAND_DISPLAY").is_ok()
+                && !std::env::var("WAYLAND_DISPLAY")
+                    .unwrap_or_default()
+                    .is_empty();
 
             if !display_set && !wayland_set {
                 log::error!("WSL2 detected but no display server found (DISPLAY and WAYLAND_DISPLAY are unset)");
@@ -104,9 +109,11 @@ impl Renderer {
                 panic!("No display server available. WSL2 requires WSLg or an X server for GUI applications. \
                        Run 'wsl --update' from Windows PowerShell and restart WSL with 'wsl --shutdown'.");
             }
-            log::info!("WSL2 detected, DISPLAY={:?}, WAYLAND_DISPLAY={:?}",
+            log::info!(
+                "WSL2 detected, DISPLAY={:?}, WAYLAND_DISPLAY={:?}",
                 std::env::var("DISPLAY").ok(),
-                std::env::var("WAYLAND_DISPLAY").ok());
+                std::env::var("WAYLAND_DISPLAY").ok()
+            );
         }
 
         // On WSL2, try Vulkan first (native WSLg support), then GL as fallback
@@ -126,10 +133,12 @@ impl Renderer {
         let surface = instance.create_surface(window.clone()).unwrap_or_else(|e| {
             log::error!("Failed to create surface: {:?}", e);
             if is_wsl2() {
-                panic!("Surface creation failed on WSL2. Ensure WSLg is properly configured: \
+                panic!(
+                    "Surface creation failed on WSL2. Ensure WSLg is properly configured: \
                        1. Run 'wsl --update' from Windows PowerShell \
                        2. Restart WSL with 'wsl --shutdown' \
-                       3. Ensure your GPU drivers are up to date on Windows");
+                       3. Ensure your GPU drivers are up to date on Windows"
+                );
             } else {
                 panic!("Failed to create rendering surface: {:?}", e);
             }
@@ -206,19 +215,33 @@ impl Renderer {
         let swash_cache = SwashCache::new();
         let cache = Cache::new(&device);
         let mut text_atlas = TextAtlas::new(&device, &queue, &cache, surface_format);
-        let text_renderer =
-            TextRenderer::new(&mut text_atlas, &device, wgpu::MultisampleState::default(), None);
+        let text_renderer = TextRenderer::new(
+            &mut text_atlas,
+            &device,
+            wgpu::MultisampleState::default(),
+            None,
+        );
 
         let viewport = Viewport::new(&device, &cache);
 
         // Create text buffer for rendering
         let line_height = font_size * 1.2;
         let mut text_buffer = Buffer::new(&mut font_system, Metrics::new(font_size, line_height));
-        text_buffer.set_size(&mut font_system, Some(size.width as f32), Some(size.height as f32));
+        text_buffer.set_size(
+            &mut font_system,
+            Some(size.width as f32),
+            Some(size.height as f32),
+        );
 
         // Measure actual cell width from font by shaping a character
-        let mut measure_buffer = Buffer::new(&mut font_system, Metrics::new(font_size, line_height));
-        measure_buffer.set_text(&mut font_system, "M", Attrs::new().family(Family::Monospace), Shaping::Advanced);
+        let mut measure_buffer =
+            Buffer::new(&mut font_system, Metrics::new(font_size, line_height));
+        measure_buffer.set_text(
+            &mut font_system,
+            "M",
+            Attrs::new().family(Family::Monospace),
+            Shaping::Advanced,
+        );
         measure_buffer.shape_until_scroll(&mut font_system, false);
 
         let cell_width = measure_buffer
@@ -229,7 +252,12 @@ impl Renderer {
             .unwrap_or(font_size * 0.6);
         let cell_height = line_height;
 
-        log::info!("Measured cell dimensions: {}x{} (font_size: {})", cell_width, cell_height, font_size);
+        log::info!(
+            "Measured cell dimensions: {}x{} (font_size: {})",
+            cell_width,
+            cell_height,
+            font_size
+        );
 
         // Create background rendering pipeline
         let bg_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -283,7 +311,8 @@ impl Renderer {
 
         // Pre-allocate buffers for background quads
         // Estimate max cells based on window size
-        let max_cells = ((size.width as f32 / cell_width) * (size.height as f32 / cell_height)) as usize + 1000;
+        let max_cells =
+            ((size.width as f32 / cell_width) * (size.height as f32 / cell_height)) as usize + 1000;
 
         let bg_vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Background Vertex Buffer"),
@@ -316,10 +345,10 @@ impl Renderer {
             bg_index_buffer,
             cell_width,
             cell_height,
-            cached_bg_vertices: Vec::new(),
-            cached_bg_indices: Vec::new(),
-            cached_text_spans: Vec::new(),
-            cache_valid: false,
+            cached_row_bg_vertices: Vec::new(),
+            cached_row_text_spans: Vec::new(),
+            num_cached_rows: 0,
+            current_bg_index_count: 0,
         }
     }
 
@@ -338,7 +367,9 @@ impl Renderer {
             );
 
             // Reallocate background buffers for new size
-            let max_cells = ((new_size.width as f32 / self.cell_width) * (new_size.height as f32 / self.cell_height)) as usize + 1000;
+            let max_cells = ((new_size.width as f32 / self.cell_width)
+                * (new_size.height as f32 / self.cell_height)) as usize
+                + 1000;
 
             self.bg_vertex_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("Background Vertex Buffer"),
@@ -354,8 +385,11 @@ impl Renderer {
                 mapped_at_creation: false,
             });
 
-            // Invalidate cache on resize
-            self.cache_valid = false;
+            // Invalidate row caches on resize
+            self.cached_row_bg_vertices.clear();
+            self.cached_row_text_spans.clear();
+            self.num_cached_rows = 0;
+            self.current_bg_index_count = 0;
         }
     }
 
@@ -373,35 +407,77 @@ impl Renderer {
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        // Only rebuild render data and reshape text if grid content changed
-        let needs_rebuild = grid.is_dirty() || !self.cache_valid;
+        // Get dirty rows info
+        let dirty_rows = grid.dirty_rows();
+        let num_visible_rows = grid.height as usize;
+
+        // Check if we need to rebuild (any dirty rows or cache size mismatch)
+        let needs_rebuild = grid.is_dirty() || self.num_cached_rows != num_visible_rows;
 
         if needs_rebuild {
-            // Build background vertices and text content
-            let (bg_vertices, bg_indices, text_spans) = self.build_render_data(grid);
+            // Ensure caches are properly sized
+            if self.num_cached_rows != num_visible_rows {
+                self.cached_row_bg_vertices
+                    .resize(num_visible_rows, Vec::new());
+                self.cached_row_text_spans
+                    .resize(num_visible_rows, Vec::new());
+                self.num_cached_rows = num_visible_rows;
+            }
 
-            // Cache the data
-            self.cached_bg_vertices = bg_vertices;
-            self.cached_bg_indices = bg_indices;
-            self.cached_text_spans = text_spans;
-            self.cache_valid = true;
+            // Build render data only for dirty rows
+            self.build_render_data_incremental(grid, dirty_rows);
+
+            // Combine all row data into final buffers
+            let mut bg_vertices = Vec::new();
+            let mut bg_indices = Vec::new();
+            let mut text_spans = Vec::new();
+            let mut vertex_offset = 0u32;
+
+            for row_idx in 0..num_visible_rows {
+                // Add background vertices with adjusted indices
+                for vertex in &self.cached_row_bg_vertices[row_idx] {
+                    bg_vertices.push(*vertex);
+                }
+                // Each row's indices need to be offset by the current vertex count
+                let row_vertex_count = self.cached_row_bg_vertices[row_idx].len() as u32;
+                // Generate indices for quads (4 vertices per quad, 6 indices per quad)
+                let num_quads = row_vertex_count / 4;
+                for quad in 0..num_quads {
+                    let base = vertex_offset + quad * 4;
+                    bg_indices.push(base);
+                    bg_indices.push(base + 1);
+                    bg_indices.push(base + 2);
+                    bg_indices.push(base);
+                    bg_indices.push(base + 2);
+                    bg_indices.push(base + 3);
+                }
+                vertex_offset += row_vertex_count;
+
+                // Add text spans
+                for span in &self.cached_row_text_spans[row_idx] {
+                    text_spans.push(span.clone());
+                }
+            }
+
+            // Store index count for draw call
+            self.current_bg_index_count = bg_indices.len() as u32;
 
             // Upload background data
-            if !self.cached_bg_vertices.is_empty() {
+            if !bg_vertices.is_empty() {
                 self.queue.write_buffer(
                     &self.bg_vertex_buffer,
                     0,
-                    bytemuck::cast_slice(&self.cached_bg_vertices),
+                    bytemuck::cast_slice(&bg_vertices),
                 );
                 self.queue.write_buffer(
                     &self.bg_index_buffer,
                     0,
-                    bytemuck::cast_slice(&self.cached_bg_indices),
+                    bytemuck::cast_slice(&bg_indices),
                 );
             }
 
             // Prepare text rendering with per-character colors
-            let rich_text: Vec<(&str, Attrs)> = self.cached_text_spans
+            let rich_text: Vec<(&str, Attrs)> = text_spans
                 .iter()
                 .map(|(text, color)| {
                     (
@@ -419,7 +495,8 @@ impl Renderer {
             );
 
             // Shape the text to calculate glyph positions
-            self.text_buffer.shape_until_scroll(&mut self.font_system, false);
+            self.text_buffer
+                .shape_until_scroll(&mut self.font_system, false);
 
             // Clear the dirty flag now that we've processed the changes
             grid.clear_dirty();
@@ -490,14 +567,12 @@ impl Renderer {
             });
 
             // Render backgrounds
-            if !self.cached_bg_indices.is_empty() {
+            if self.current_bg_index_count > 0 {
                 render_pass.set_pipeline(&self.bg_pipeline);
                 render_pass.set_vertex_buffer(0, self.bg_vertex_buffer.slice(..));
-                render_pass.set_index_buffer(
-                    self.bg_index_buffer.slice(..),
-                    wgpu::IndexFormat::Uint32,
-                );
-                render_pass.draw_indexed(0..self.cached_bg_indices.len() as u32, 0, 0..1);
+                render_pass
+                    .set_index_buffer(self.bg_index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                render_pass.draw_indexed(0..self.current_bg_index_count, 0, 0..1);
             }
 
             // Render text
@@ -515,45 +590,49 @@ impl Renderer {
         Ok(())
     }
 
-    fn build_render_data(
-        &self,
-        grid: &Grid,
-    ) -> (Vec<BgVertex>, Vec<u32>, Vec<(String, GlyphonColor)>) {
+    /// Build render data incrementally, only updating dirty rows
+    fn build_render_data_incremental(&mut self, grid: &Grid, dirty_rows: &[bool]) {
         let styles = &grid.styles;
-        let mut bg_vertices = Vec::new();
-        let mut bg_indices = Vec::new();
-        let mut text_spans: Vec<(String, GlyphonColor)> = Vec::new();
-
         let width = self.size.width as f32;
         let height = self.size.height as f32;
 
         // Get default background for comparison (skip rendering cells that match default)
         let default_bg = color_to_rgba(styles.default_background_color, styles);
 
-        let start_row = grid.scroll_pos.saturating_sub(grid.height as usize);
+        let start_row = grid.scroll_pos.saturating_sub(grid.height as usize - 1);
         let active_cells = grid.active_grid_ref();
         let grid_len = active_cells.len();
-        let end_row = std::cmp::min(grid_len / grid.width as usize, start_row + grid.height as usize);
+        let num_visible_rows = grid.height as usize;
 
-        let mut vertex_count = 0u32;
+        // Process each visible row
+        for display_row in 0..num_visible_rows {
+            // Skip rows that aren't dirty
+            if display_row < dirty_rows.len() && !dirty_rows[display_row] {
+                continue;
+            }
 
-        // Batch consecutive characters with same color
-        let mut current_span = String::new();
-        let mut current_color: Option<GlyphonColor> = None;
+            let row_idx = start_row + display_row;
 
-        for row_idx in start_row..end_row {
+            // Clear and rebuild this row's cached data
+            self.cached_row_bg_vertices[display_row].clear();
+            self.cached_row_text_spans[display_row].clear();
+
+            // Batch consecutive characters with same color for this row
+            let mut current_span = String::new();
+            let mut current_color: Option<GlyphonColor> = None;
+
             for col_idx in 0..grid.width as usize {
                 let cell_index = row_idx * grid.width as usize + col_idx;
 
                 // Bounds check to prevent crash on grid corruption
                 if cell_index >= grid_len {
-                    break;
+                    // Fill rest of row with spaces
+                    current_span.push(' ');
+                    continue;
                 }
 
                 // Get cell from the active grid
                 let cell = &active_cells[cell_index];
-
-                let display_row = row_idx - start_row;
 
                 // Calculate cell position in pixels
                 let x = col_idx as f32 * self.cell_width;
@@ -573,25 +652,33 @@ impl Renderer {
                     let x1 = ((x + self.cell_width) / width) * 2.0 - 1.0;
                     let y1 = 1.0 - ((y + self.cell_height) / height) * 2.0;
 
-                    let base_vertex = vertex_count;
-                    bg_vertices.push(BgVertex { position: [x0, y0], color: bg_color });
-                    bg_vertices.push(BgVertex { position: [x1, y0], color: bg_color });
-                    bg_vertices.push(BgVertex { position: [x1, y1], color: bg_color });
-                    bg_vertices.push(BgVertex { position: [x0, y1], color: bg_color });
-
-                    bg_indices.push(base_vertex);
-                    bg_indices.push(base_vertex + 1);
-                    bg_indices.push(base_vertex + 2);
-                    bg_indices.push(base_vertex);
-                    bg_indices.push(base_vertex + 2);
-                    bg_indices.push(base_vertex + 3);
-
-                    vertex_count += 4;
+                    self.cached_row_bg_vertices[display_row].push(BgVertex {
+                        position: [x0, y0],
+                        color: bg_color,
+                    });
+                    self.cached_row_bg_vertices[display_row].push(BgVertex {
+                        position: [x1, y0],
+                        color: bg_color,
+                    });
+                    self.cached_row_bg_vertices[display_row].push(BgVertex {
+                        position: [x1, y1],
+                        color: bg_color,
+                    });
+                    self.cached_row_bg_vertices[display_row].push(BgVertex {
+                        position: [x0, y1],
+                        color: bg_color,
+                    });
                 }
 
                 // Build text content - handle cursor
-                let char_to_render = if row_idx == grid.cursor_pos.0 && col_idx == grid.cursor_pos.1 {
-                    styles.cursor_state.to_string().chars().next().unwrap_or(' ')
+                let char_to_render = if row_idx == grid.cursor_pos.0 && col_idx == grid.cursor_pos.1
+                {
+                    styles
+                        .cursor_state
+                        .to_string()
+                        .chars()
+                        .next()
+                        .unwrap_or(' ')
                 } else {
                     cell.char
                 };
@@ -608,7 +695,8 @@ impl Renderer {
                         // Flush previous span
                         if !current_span.is_empty() {
                             if let Some(color) = current_color {
-                                text_spans.push((std::mem::take(&mut current_span), color));
+                                self.cached_row_text_spans[display_row]
+                                    .push((std::mem::take(&mut current_span), color));
                             }
                         }
                         current_span.push(char_to_render);
@@ -616,24 +704,18 @@ impl Renderer {
                     }
                 }
             }
-            // Flush span before newline
+
+            // Flush span at end of row
             if !current_span.is_empty() {
                 if let Some(color) = current_color {
-                    text_spans.push((std::mem::take(&mut current_span), color));
+                    self.cached_row_text_spans[display_row].push((current_span, color));
                 }
             }
-            current_color = None;
-            text_spans.push(("\n".to_string(), GlyphonColor::rgb(255, 255, 255)));
-        }
 
-        // Flush any remaining span
-        if !current_span.is_empty() {
-            if let Some(color) = current_color {
-                text_spans.push((current_span, color));
-            }
+            // Add newline at end of row
+            self.cached_row_text_spans[display_row]
+                .push(("\n".to_string(), GlyphonColor::rgb(255, 255, 255)));
         }
-
-        (bg_vertices, bg_indices, text_spans)
     }
 }
 

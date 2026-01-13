@@ -10,7 +10,7 @@ use winit::{
     dpi::PhysicalSize,
     event::{ElementState, KeyEvent, MouseScrollDelta, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
-    keyboard::{Key, PhysicalKey, KeyCode},
+    keyboard::{Key, KeyCode, PhysicalKey},
     window::{Window, WindowAttributes, WindowId},
 };
 
@@ -252,7 +252,8 @@ impl WgpuApp {
             ClientCommand::ReportCursorPosition => self.send_raw_data(
                 format!(
                     "\x1b[{};{}R",
-                    self.grid.cursor_pos.0 + 1, self.grid.cursor_pos.1 + 1
+                    self.grid.cursor_pos.0 + 1,
+                    self.grid.cursor_pos.1 + 1
                 )
                 .as_bytes()
                 .to_vec(),
@@ -273,9 +274,15 @@ impl WgpuApp {
                 let width = self.grid.width as usize;
                 if col < width.saturating_sub(5) {
                     let (fg, bg) = if self.grid.styles.reverse {
-                        (self.grid.styles.active_background_color, self.grid.styles.active_text_color)
+                        (
+                            self.grid.styles.active_background_color,
+                            self.grid.styles.active_text_color,
+                        )
                     } else {
-                        (self.grid.styles.active_text_color, self.grid.styles.active_background_color)
+                        (
+                            self.grid.styles.active_text_color,
+                            self.grid.styles.active_background_color,
+                        )
                     };
                     for i in col..col + 4 {
                         let index = row * width + i;
@@ -328,9 +335,15 @@ impl WgpuApp {
                 // Bounds check - row must be within height
                 if row < height {
                     let (fg, bg) = if self.grid.styles.reverse {
-                        (self.grid.styles.active_background_color, self.grid.styles.active_text_color)
+                        (
+                            self.grid.styles.active_background_color,
+                            self.grid.styles.active_text_color,
+                        )
                     } else {
-                        (self.grid.styles.active_text_color, self.grid.styles.active_background_color)
+                        (
+                            self.grid.styles.active_text_color,
+                            self.grid.styles.active_background_color,
+                        )
                     };
 
                     // Delete lines at cursor position by shifting lines up
@@ -378,9 +391,15 @@ impl WgpuApp {
         let end_index = std::cmp::min(end_index, grid_len);
 
         let (fg, bg) = if self.grid.styles.reverse {
-            (self.grid.styles.active_background_color, self.grid.styles.active_text_color)
+            (
+                self.grid.styles.active_background_color,
+                self.grid.styles.active_text_color,
+            )
         } else {
-            (self.grid.styles.active_text_color, self.grid.styles.active_background_color)
+            (
+                self.grid.styles.active_text_color,
+                self.grid.styles.active_background_color,
+            )
         };
 
         for i in start_index..end_index {
@@ -601,7 +620,10 @@ impl ApplicationHandler for WgpuApp {
             if new_cols != self.config.cols || new_rows != self.config.rows {
                 log::info!(
                     "Updating grid size from {}x{} to {}x{} based on actual cell dimensions",
-                    self.config.cols, self.config.rows, new_cols, new_rows
+                    self.config.cols,
+                    self.config.rows,
+                    new_cols,
+                    new_rows
                 );
                 self.config.cols = new_cols;
                 self.config.rows = new_rows;
@@ -698,7 +720,7 @@ impl ApplicationHandler for WgpuApp {
         // Always use WaitUntil to avoid busy-looping - never use Poll
         // 8ms gives ~120fps max which is responsive enough for typing
         event_loop.set_control_flow(ControlFlow::WaitUntil(
-            Instant::now() + Duration::from_millis(8)
+            Instant::now() + Duration::from_millis(8),
         ));
     }
 }
