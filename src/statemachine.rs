@@ -19,6 +19,13 @@ impl StateMachine {
     pub fn new(tx: Sender<ClientCommand>) -> Self {
         Self { tx }
     }
+
+    /// Send a command, logging any errors instead of panicking
+    fn send(&self, cmd: ClientCommand) {
+        if let Err(e) = self.tx.send(cmd) {
+            log::trace!("Failed to send command (channel closed): {}", e);
+        }
+    }
 }
 
 impl Handler for StateMachine {
@@ -39,11 +46,9 @@ impl Handler for StateMachine {
                     VteCursorShape::Hidden => CursorShape::Hidden,
                 };
 
-                self.tx
-                    .send(ClientCommand::SetCursorState(CursorState::new(
-                        shape, blinking,
-                    )))
-                    .unwrap();
+                self.send(ClientCommand::SetCursorState(CursorState::new(
+                    shape, blinking,
+                )));
             }
             _ => {}
         }
@@ -59,35 +64,27 @@ impl Handler for StateMachine {
             VteCursorShape::Hidden => CursorShape::Hidden,
         };
 
-        self.tx
-            .send(ClientCommand::SetCursorShape(cursor_shape))
-            .unwrap();
+        self.send(ClientCommand::SetCursorShape(cursor_shape));
     }
 
     fn input(&mut self, c: char) {
         log::trace!("Input character: {}", c);
-        self.tx.send(ClientCommand::Print(c)).unwrap();
+        self.send(ClientCommand::Print(c));
     }
 
     fn goto(&mut self, line: i32, col: usize) {
         log::debug!("Goto line: {}, col: {}", line, col);
-        self.tx
-            .send(ClientCommand::MoveCursor(line as i16, col as i16))
-            .unwrap();
+        self.send(ClientCommand::MoveCursor(line as i16, col as i16));
     }
 
     fn goto_line(&mut self, line: i32) {
         log::debug!("Goto line: {}", line);
-        self.tx
-            .send(ClientCommand::MoveCursor(line as i16, 0))
-            .unwrap();
+        self.send(ClientCommand::MoveCursor(line as i16, 0));
     }
 
     fn goto_col(&mut self, col: usize) {
         log::debug!("Goto col: {}", col);
-        self.tx
-            .send(ClientCommand::MoveCursorAbsoluteHorizontal(col as i16))
-            .unwrap();
+        self.send(ClientCommand::MoveCursorAbsoluteHorizontal(col as i16));
     }
 
     fn insert_blank(&mut self, count: usize) {
@@ -96,27 +93,21 @@ impl Handler for StateMachine {
 
     fn move_up(&mut self, u: usize) {
         log::debug!("Move up: {}", u);
-        self.tx
-            .send(ClientCommand::MoveCursorVertical(-(u as i16)))
-            .unwrap();
+        self.send(ClientCommand::MoveCursorVertical(-(u as i16)));
     }
 
     fn move_down(&mut self, d: usize) {
         log::debug!("Move down: {}", d);
-        self.tx
-            .send(ClientCommand::MoveCursorVertical(d as i16))
-            .unwrap();
+        self.send(ClientCommand::MoveCursorVertical(d as i16));
     }
 
     fn identify_terminal(&mut self, intermediate: Option<char>) {
         log::debug!("Identify terminal: {:?}", intermediate);
         match intermediate {
             Some('>') => {
-                self.tx
-                    .send(ClientCommand::IdentifyTerminal(
-                        IdentifyTerminalMode::Secondary,
-                    ))
-                    .unwrap();
+                self.send(ClientCommand::IdentifyTerminal(
+                    IdentifyTerminalMode::Secondary,
+                ));
             }
             _ => {
                 log::error!("Unknown intermediate: {:?}", intermediate);
@@ -129,10 +120,10 @@ impl Handler for StateMachine {
         log::debug!("Device status: {}", arg);
         match arg {
             5 => {
-                self.tx.send(ClientCommand::ReportCondition(true)).unwrap();
+                self.send(ClientCommand::ReportCondition(true));
             }
             6 => {
-                self.tx.send(ClientCommand::ReportCursorPosition).unwrap();
+                self.send(ClientCommand::ReportCursorPosition);
             }
             _ => {
                 log::error!("Unknown device status: {}", arg);
@@ -142,50 +133,42 @@ impl Handler for StateMachine {
 
     fn move_forward(&mut self, col: usize) {
         log::debug!("Move forward: {}", col);
-        self.tx
-            .send(ClientCommand::MoveCursorHorizontal(col as i16))
-            .unwrap();
+        self.send(ClientCommand::MoveCursorHorizontal(col as i16));
     }
 
     fn move_backward(&mut self, col: usize) {
         log::debug!("Move backward: {}", col);
-        self.tx
-            .send(ClientCommand::MoveCursorHorizontal(-(col as i16)))
-            .unwrap();
+        self.send(ClientCommand::MoveCursorHorizontal(-(col as i16)));
     }
 
     fn move_down_and_cr(&mut self, _row: usize) {
         log::debug!("Move down and CR");
-        self.tx
-            .send(ClientCommand::MoveCursorVerticalWithCarriageReturn(1))
-            .unwrap();
+        self.send(ClientCommand::MoveCursorVerticalWithCarriageReturn(1));
     }
 
     fn move_up_and_cr(&mut self, _row: usize) {
         log::debug!("Move up and CR");
-        self.tx
-            .send(ClientCommand::MoveCursorVerticalWithCarriageReturn(-1))
-            .unwrap();
+        self.send(ClientCommand::MoveCursorVerticalWithCarriageReturn(-1));
     }
 
     fn put_tab(&mut self, _count: u16) {
         log::debug!("Put tab");
-        self.tx.send(ClientCommand::PutTab).unwrap();
+        self.send(ClientCommand::PutTab);
     }
 
     fn backspace(&mut self) {
         log::debug!("Backspace");
-        self.tx.send(ClientCommand::Backspace).unwrap();
+        self.send(ClientCommand::Backspace);
     }
 
     fn carriage_return(&mut self) {
         log::debug!("Carriage return");
-        self.tx.send(ClientCommand::CarriageReturn).unwrap();
+        self.send(ClientCommand::CarriageReturn);
     }
 
     fn linefeed(&mut self) {
         log::debug!("Line feed");
-        self.tx.send(ClientCommand::LineFeed).unwrap();
+        self.send(ClientCommand::LineFeed);
     }
 
     fn bell(&mut self) {
@@ -198,7 +181,7 @@ impl Handler for StateMachine {
 
     fn newline(&mut self) {
         log::debug!("Newline");
-        self.tx.send(ClientCommand::NewLine).unwrap();
+        self.send(ClientCommand::NewLine);
     }
 
     fn set_horizontal_tabstop(&mut self) {
@@ -219,12 +202,12 @@ impl Handler for StateMachine {
 
     fn delete_lines(&mut self, l: usize) {
         log::debug!("Delete lines: {}", l);
-        self.tx.send(ClientCommand::DeleteLines(l as i16)).unwrap();
+        self.send(ClientCommand::DeleteLines(l as i16));
     }
 
     fn erase_chars(&mut self, c: usize) {
         log::debug!("Erase chars: {}", c);
-        self.tx.send(ClientCommand::ClearCount(c as i16)).unwrap();
+        self.send(ClientCommand::ClearCount(c as i16));
     }
 
     fn delete_chars(&mut self, _: usize) {
@@ -241,25 +224,25 @@ impl Handler for StateMachine {
 
     fn save_cursor_position(&mut self) {
         log::debug!("Save cursor position");
-        self.tx.send(ClientCommand::SaveCursor).unwrap();
+        self.send(ClientCommand::SaveCursor);
     }
 
     fn restore_cursor_position(&mut self) {
         log::debug!("Restore cursor position");
-        self.tx.send(ClientCommand::RestoreCursor).unwrap();
+        self.send(ClientCommand::RestoreCursor);
     }
 
     fn clear_line(&mut self, mode: LineClearMode) {
         log::debug!("Clear line: {:?}", mode);
         match mode {
             LineClearMode::All => {
-                self.tx.send(ClientCommand::ClearLine).unwrap();
+                self.send(ClientCommand::ClearLine);
             }
             LineClearMode::Left => {
-                self.tx.send(ClientCommand::ClearLineBeforeCursor).unwrap();
+                self.send(ClientCommand::ClearLineBeforeCursor);
             }
             LineClearMode::Right => {
-                self.tx.send(ClientCommand::ClearLineAfterCursor).unwrap();
+                self.send(ClientCommand::ClearLineAfterCursor);
             }
         }
     }
@@ -268,17 +251,17 @@ impl Handler for StateMachine {
         log::debug!("Clear screen: {:?}", mode);
         match mode {
             ClearMode::All => {
-                self.tx.send(ClientCommand::ClearScreen).unwrap();
+                self.send(ClientCommand::ClearScreen);
             }
             ClearMode::Above => {
-                self.tx.send(ClientCommand::ClearAbove).unwrap();
+                self.send(ClientCommand::ClearAbove);
             }
             ClearMode::Below => {
-                self.tx.send(ClientCommand::ClearBelow).unwrap();
+                self.send(ClientCommand::ClearBelow);
             }
             ClearMode::Saved => {
                 // Should also delete lines saved in the scrollback buffer
-                self.tx.send(ClientCommand::ClearScreen).unwrap();
+                self.send(ClientCommand::ClearScreen);
             }
         }
     }
@@ -301,9 +284,7 @@ impl Handler for StateMachine {
 
     fn terminal_attribute(&mut self, attr: Attr) {
         log::debug!("Terminal attribute: {:?}", attr);
-        self.tx
-            .send(ClientCommand::SGR(SgrAttribute::from_vte_attr(attr)))
-            .unwrap();
+        self.send(ClientCommand::SGR(SgrAttribute::from_vte_attr(attr)));
     }
 
     fn set_mode(&mut self, _mode: Mode) {
@@ -322,12 +303,10 @@ impl Handler for StateMachine {
         log::debug!("Set private mode: {:?}", mode);
         match mode {
             PrivateMode::Named(NamedPrivateMode::ShowCursor) => {
-                self.tx.send(ClientCommand::ShowCursor).unwrap();
+                self.send(ClientCommand::ShowCursor);
             }
             PrivateMode::Named(NamedPrivateMode::SwapScreenAndSetRestoreCursor) => {
-                self.tx
-                    .send(ClientCommand::SwapScreenAndSetRestoreCursor)
-                    .unwrap();
+                self.send(ClientCommand::SwapScreenAndSetRestoreCursor);
             }
             _ => {
                 log::error!("Set private mode: {:?}", mode);
@@ -339,12 +318,10 @@ impl Handler for StateMachine {
         log::debug!("Unset private mode: {:?}", mode);
         match mode {
             PrivateMode::Named(NamedPrivateMode::ShowCursor) => {
-                self.tx.send(ClientCommand::HideCursor).unwrap();
+                self.send(ClientCommand::HideCursor);
             }
             PrivateMode::Named(NamedPrivateMode::SwapScreenAndSetRestoreCursor) => {
-                self.tx
-                    .send(ClientCommand::SwapScreenAndSetRestoreCursor)
-                    .unwrap();
+                self.send(ClientCommand::SwapScreenAndSetRestoreCursor);
             }
             _ => {
                 log::error!("Unset private mode: {:?}", mode);
@@ -378,7 +355,7 @@ impl Handler for StateMachine {
 
     fn set_color(&mut self, i: usize, rgb: Rgb) {
         log::debug!("Set color: {} {:?}", i, rgb);
-        self.tx.send(ClientCommand::SetColor(i, rgb)).unwrap();
+        self.send(ClientCommand::SetColor(i, rgb));
     }
 
     fn dynamic_color_sequence(&mut self, _: String, _: usize, _: &str) {
@@ -387,7 +364,7 @@ impl Handler for StateMachine {
 
     fn reset_color(&mut self, i: usize) {
         log::debug!("Reset color: {}", i);
-        self.tx.send(ClientCommand::ResetColor(i)).unwrap();
+        self.send(ClientCommand::ResetColor(i));
     }
 
     fn clipboard_store(&mut self, _: u8, _: &[u8]) {
