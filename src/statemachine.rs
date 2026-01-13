@@ -104,16 +104,22 @@ impl Handler for StateMachine {
     fn identify_terminal(&mut self, intermediate: Option<char>) {
         log::debug!("Identify terminal: {:?}", intermediate);
         match intermediate {
+            None => {
+                // Primary device attributes (DA1) - report as VT220
+                self.send(ClientCommand::IdentifyTerminal(
+                    IdentifyTerminalMode::Primary,
+                ));
+            }
             Some('>') => {
+                // Secondary device attributes (DA2)
                 self.send(ClientCommand::IdentifyTerminal(
                     IdentifyTerminalMode::Secondary,
                 ));
             }
             _ => {
-                log::error!("Unknown intermediate: {:?}", intermediate);
+                log::debug!("Unknown identify terminal intermediate: {:?}", intermediate);
             }
         }
-        log::debug!("Identify terminal");
     }
 
     fn device_status(&mut self, arg: usize) {
@@ -308,8 +314,14 @@ impl Handler for StateMachine {
             PrivateMode::Named(NamedPrivateMode::SwapScreenAndSetRestoreCursor) => {
                 self.send(ClientCommand::SwapScreenAndSetRestoreCursor);
             }
+            PrivateMode::Named(NamedPrivateMode::CursorKeys) => {
+                self.send(ClientCommand::CursorKeysMode(true));
+            }
+            PrivateMode::Named(NamedPrivateMode::BracketedPaste) => {
+                self.send(ClientCommand::BracketedPasteMode(true));
+            }
             _ => {
-                log::error!("Set private mode: {:?}", mode);
+                log::debug!("Unhandled set private mode: {:?}", mode);
             }
         }
     }
@@ -323,8 +335,14 @@ impl Handler for StateMachine {
             PrivateMode::Named(NamedPrivateMode::SwapScreenAndSetRestoreCursor) => {
                 self.send(ClientCommand::SwapScreenAndSetRestoreCursor);
             }
+            PrivateMode::Named(NamedPrivateMode::CursorKeys) => {
+                self.send(ClientCommand::CursorKeysMode(false));
+            }
+            PrivateMode::Named(NamedPrivateMode::BracketedPaste) => {
+                self.send(ClientCommand::BracketedPasteMode(false));
+            }
             _ => {
-                log::error!("Unset private mode: {:?}", mode);
+                log::debug!("Unhandled unset private mode: {:?}", mode);
             }
         }
     }

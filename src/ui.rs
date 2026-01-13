@@ -107,6 +107,10 @@ pub struct WgpuApp {
     resize_deadline: Option<Instant>,
     /// Debug overlay information
     debug_info: DebugInfo,
+    /// Cursor keys application mode (DECCKM)
+    cursor_keys_mode: bool,
+    /// Bracketed paste mode
+    bracketed_paste_mode: bool,
 }
 
 impl WgpuApp {
@@ -130,6 +134,8 @@ impl WgpuApp {
             pending_resize: None,
             resize_deadline: None,
             debug_info: DebugInfo::new(),
+            cursor_keys_mode: false,
+            bracketed_paste_mode: false,
         }
     }
 
@@ -407,6 +413,12 @@ impl WgpuApp {
             ClientCommand::SetCursorShape(shape) => {
                 self.grid.styles.cursor_state.shape = shape;
             }
+            ClientCommand::CursorKeysMode(enabled) => {
+                self.cursor_keys_mode = enabled;
+            }
+            ClientCommand::BracketedPasteMode(enabled) => {
+                self.bracketed_paste_mode = enabled;
+            }
             _ => {
                 log::info!("Unsupported command: {:?}", command);
             }
@@ -460,19 +472,24 @@ impl WgpuApp {
                 return;
             }
             PhysicalKey::Code(KeyCode::ArrowUp) => {
-                self.send_raw_data(vec![27, 91, 65]);
+                // Application mode: ESC O A, Normal mode: ESC [ A
+                let seq = if self.cursor_keys_mode { vec![27, 79, 65] } else { vec![27, 91, 65] };
+                self.send_raw_data(seq);
                 return;
             }
             PhysicalKey::Code(KeyCode::ArrowDown) => {
-                self.send_raw_data(vec![27, 91, 66]);
+                let seq = if self.cursor_keys_mode { vec![27, 79, 66] } else { vec![27, 91, 66] };
+                self.send_raw_data(seq);
                 return;
             }
             PhysicalKey::Code(KeyCode::ArrowLeft) => {
-                self.send_raw_data(vec![27, 91, 68]);
+                let seq = if self.cursor_keys_mode { vec![27, 79, 68] } else { vec![27, 91, 68] };
+                self.send_raw_data(seq);
                 return;
             }
             PhysicalKey::Code(KeyCode::ArrowRight) => {
-                self.send_raw_data(vec![27, 91, 67]);
+                let seq = if self.cursor_keys_mode { vec![27, 79, 67] } else { vec![27, 91, 67] };
+                self.send_raw_data(seq);
                 return;
             }
             PhysicalKey::Code(KeyCode::Enter) => {

@@ -85,8 +85,9 @@ pub enum ServerCommand {
 pub enum ClientCommand {
     AlternateScreenBuffer(bool),
     Backspace,
-    BrackPasteMode(bool),
+    BracketedPasteMode(bool),
     CarriageReturn,
+    CursorKeysMode(bool),
     ClearAbove,
     ClearBelow,
     ClearCount(i16),
