@@ -29,8 +29,8 @@ impl StateMachine {
 }
 
 impl Handler for StateMachine {
-    fn set_title(&mut self, _: Option<String>) {
-        log::error!("Set title");
+    fn set_title(&mut self, title: Option<String>) {
+        self.send(ClientCommand::SetTitle(title));
     }
 
     fn set_cursor_style(&mut self, s: Option<CursorStyle>) {

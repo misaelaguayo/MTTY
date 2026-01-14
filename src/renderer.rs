@@ -195,13 +195,12 @@ impl Renderer {
             (adapter, device, queue)
         });
 
-        // Configure surface - prefer non-sRGB format to avoid double gamma correction
-        // Terminal colors from applications are already in sRGB space
+        // Configure surface - use sRGB format for correct color output
         let surface_caps = surface.get_capabilities(&adapter);
         let surface_format = surface_caps
             .formats
             .iter()
-            .find(|f| !f.is_srgb())
+            .find(|f| f.is_srgb())
             .copied()
             .unwrap_or(surface_caps.formats[0]);
 

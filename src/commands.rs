@@ -83,6 +83,7 @@ pub enum ServerCommand {
 
 #[derive(Debug, Clone)]
 pub enum ClientCommand {
+    SetTitle(Option<String>),
     AlternateScreenBuffer(bool),
     Backspace,
     BracketedPasteMode(bool),

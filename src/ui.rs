@@ -45,6 +45,7 @@ impl Runner for WgpuRunner {
         event_loop.set_control_flow(ControlFlow::Wait);
 
         let mut app = WgpuApp::new(
+            "MTTY",
             &self.config,
             self.exit_flag.clone(),
             self.tx.clone(),
@@ -55,43 +56,8 @@ impl Runner for WgpuRunner {
     }
 }
 
-/// Debounce duration for window resize events to avoid excessive grid/PTY updates
-const RESIZE_DEBOUNCE_MS: u64 = 50;
-
-/// Debug information displayed as an overlay
-pub struct DebugInfo {
-    /// Whether to show debug overlay (toggled with Ctrl+Shift+I)
-    pub show: bool,
-    /// Last time FPS was calculated
-    last_update: Instant,
-    /// Frame count since last FPS update
-    frame_count: u32,
-    /// Current FPS value
-    pub fps: f32,
-}
-
-impl DebugInfo {
-    fn new() -> Self {
-        Self {
-            show: false,
-            last_update: Instant::now(),
-            frame_count: 0,
-            fps: 0.0,
-        }
-    }
-
-    fn update(&mut self) {
-        self.frame_count += 1;
-        let elapsed = self.last_update.elapsed();
-        if elapsed >= Duration::from_secs(1) {
-            self.fps = self.frame_count as f32 / elapsed.as_secs_f32();
-            self.frame_count = 0;
-            self.last_update = Instant::now();
-        }
-    }
-}
-
 pub struct WgpuApp {
+    title: String,
     exit_flag: Arc<AtomicBool>,
     input: String,
     tx: Sender<ServerCommand>,
@@ -113,8 +79,142 @@ pub struct WgpuApp {
     bracketed_paste_mode: bool,
 }
 
+impl ApplicationHandler for WgpuApp {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        if self.window.is_none() {
+            let window_attributes = WindowAttributes::default()
+                .with_title(&self.title)
+                .with_inner_size(PhysicalSize::new(
+                    self.config.width as u32,
+                    self.config.height as u32,
+                ));
+
+            let window = Arc::new(
+                event_loop
+                    .create_window(window_attributes)
+                    .expect("Failed to create window"),
+            );
+
+            let renderer = Renderer::new(window.clone(), &self.config);
+
+            // Get actual cell dimensions from renderer and recalculate grid size
+            let (cell_width, cell_height) = renderer.cell_dimensions();
+            let new_cols = (self.config.width / cell_width).floor() as u16;
+            let new_rows = (self.config.height / cell_height).floor() as u16;
+
+            if new_cols != self.config.cols || new_rows != self.config.rows {
+                log::info!(
+                    "Updating grid size from {}x{} to {}x{} based on actual cell dimensions",
+                    self.config.cols,
+                    self.config.rows,
+                    new_cols,
+                    new_rows
+                );
+                self.config.cols = new_cols;
+                self.config.rows = new_rows;
+                self.grid = Grid::new(&self.config);
+
+                // Notify the PTY of the correct size
+                if let Err(e) = self.tx.send(ServerCommand::Resize(
+                    new_cols,
+                    new_rows,
+                    self.config.width as u16,
+                    self.config.height as u16,
+                )) {
+                    log::warn!("Failed to send resize command: {}", e);
+                }
+            }
+
+            self.window = Some(window);
+            self.renderer = Some(renderer);
+        }
+    }
+
+    fn window_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        _window_id: WindowId,
+        event: WindowEvent,
+    ) {
+        match event {
+            WindowEvent::CloseRequested => {
+                self.exit_flag
+                    .store(true, std::sync::atomic::Ordering::Relaxed);
+                event_loop.exit();
+            }
+            WindowEvent::Resized(new_size) => {
+                self.handle_resize(new_size);
+            }
+            WindowEvent::KeyboardInput { event, .. } => {
+                self.handle_keyboard_input(&event);
+            }
+            WindowEvent::ModifiersChanged(modifiers) => {
+                self.modifiers = modifiers.state();
+            }
+            WindowEvent::MouseWheel { delta, .. } => {
+                self.handle_mouse_wheel(delta);
+            }
+            WindowEvent::RedrawRequested => {
+                if let Some(renderer) = &mut self.renderer {
+                    match renderer.render(&mut self.grid, &self.debug_info) {
+                        Ok(_) => {
+                            self.debug_info.update();
+                        }
+                        Err(wgpu::SurfaceError::Lost) => {
+                            renderer.resize(renderer.size());
+                        }
+                        Err(wgpu::SurfaceError::OutOfMemory) => {
+                            log::error!("Out of memory");
+                            event_loop.exit();
+                        }
+                        Err(e) => {
+                            log::error!("Render error: {:?}", e);
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        // Check if we should exit (e.g., shell process died)
+        if self.exit_flag.load(std::sync::atomic::Ordering::Relaxed) {
+            event_loop.exit();
+            return;
+        }
+
+        // Process incoming commands
+        self.process_commands();
+
+        // Process buffered input
+        self.process_input();
+
+        // Apply debounced resize if deadline has passed
+        if let Some(deadline) = self.resize_deadline {
+            if Instant::now() >= deadline {
+                self.apply_pending_resize();
+            }
+        }
+
+        // Request redraw when content has changed or debug overlay is shown (for FPS updates)
+        if self.grid.is_dirty() || self.debug_info.show {
+            if let Some(window) = &self.window {
+                window.request_redraw();
+            }
+        }
+
+        // Always use WaitUntil to avoid busy-looping - never use Poll
+        // 8ms gives ~120fps max which is responsive enough for typing
+        event_loop.set_control_flow(ControlFlow::WaitUntil(
+            Instant::now() + Duration::from_millis(8),
+        ));
+    }
+}
+
 impl WgpuApp {
     pub fn new(
+        title: &str,
         config: &Config,
         exit_flag: Arc<AtomicBool>,
         tx: Sender<ServerCommand>,
@@ -122,6 +222,7 @@ impl WgpuApp {
     ) -> Self {
         log::info!("Grid size: {} x {}", config.rows, config.cols);
         Self {
+            title: title.to_string(),
             exit_flag,
             input: String::new(),
             tx,
@@ -207,34 +308,11 @@ impl WgpuApp {
             ClientCommand::Backspace => {
                 self.grid.delete_character();
             }
-            ClientCommand::Print(c) => {
-                self.grid.place_character_in_grid(cols, c);
-            }
-            ClientCommand::NewLine => {
-                self.grid.place_character_in_grid(cols, '\n');
-            }
             ClientCommand::CarriageReturn => {
                 self.grid.place_character_in_grid(cols, '\r');
             }
-            ClientCommand::LineFeed => {
-                self.grid.set_pos(self.grid.cursor_pos.0 + 1, 0);
-            }
             ClientCommand::ClearScreen => {
                 self.grid.clear_screen();
-            }
-            ClientCommand::MoveCursor(x, y) => {
-                self.grid.set_pos(x as usize, y as usize);
-            }
-            ClientCommand::MoveCursorAbsoluteHorizontal(y) => {
-                self.grid.set_pos(self.grid.cursor_pos.0, y as usize);
-            }
-            ClientCommand::MoveCursorHorizontal(y) => {
-                let new_y = self.grid.cursor_pos.1 as i16 + y;
-                self.grid.set_pos(self.grid.cursor_pos.0, new_y as usize);
-            }
-            ClientCommand::MoveCursorVertical(x) => {
-                let new_x = self.grid.cursor_pos.0 as i16 + x;
-                self.grid.set_pos(new_x as usize, self.grid.cursor_pos.1);
             }
             ClientCommand::ClearLineAfterCursor => {
                 let (row, col) = self.grid.cursor_pos;
@@ -272,27 +350,44 @@ impl WgpuApp {
                 let (row, col) = self.grid.cursor_pos;
                 self.clear_cells(row, col..col + count as usize);
             }
-            ClientCommand::SGR(command) => {
-                self.handle_sgr_attribute(command);
+            ClientCommand::DeleteChars(count) => {
+                self.grid.delete_chars(count as usize);
             }
-            ClientCommand::ReportCursorPosition => self.send_raw_data(
-                format!(
-                    "\x1b[{};{}R",
-                    self.grid.cursor_pos.0 + 1,
-                    self.grid.cursor_pos.1 + 1
-                )
-                .as_bytes()
-                .to_vec(),
-            ),
-            ClientCommand::ReportCondition(healthy) => {
-                if healthy {
-                    self.send_raw_data(b"\x1b[0n".to_vec());
-                } else {
-                    self.send_raw_data(b"\x1b[3n".to_vec());
+            ClientCommand::DeleteLines(count) => {
+                self.grid.delete_lines(count as usize);
+            }
+            ClientCommand::IdentifyTerminal(mode) => match mode {
+                IdentifyTerminalMode::Primary => {
+                    self.send_raw_data(b"\x1b[?6c".to_vec());
                 }
+                IdentifyTerminalMode::Secondary => {
+                    let version = "0.0.1";
+                    let text = format!("\x1b[>0;{version};1c");
+                    self.send_raw_data(text.as_bytes().to_vec());
+                }
+            },
+            ClientCommand::LineFeed => {
+                self.grid.set_pos(self.grid.cursor_pos.0 + 1, 0);
             }
-            ClientCommand::ShowCursor => {
-                self.grid.show_cursor();
+            ClientCommand::MoveCursor(x, y) => {
+                self.grid.set_pos(x as usize, y as usize);
+            }
+            ClientCommand::MoveCursorAbsoluteHorizontal(y) => {
+                self.grid.set_pos(self.grid.cursor_pos.0, y as usize);
+            }
+            ClientCommand::MoveCursorHorizontal(y) => {
+                let new_y = self.grid.cursor_pos.1 as i16 + y;
+                self.grid.set_pos(self.grid.cursor_pos.0, new_y as usize);
+            }
+            ClientCommand::MoveCursorVertical(x) => {
+                let new_x = self.grid.cursor_pos.0 as i16 + x;
+                self.grid.set_pos(new_x as usize, self.grid.cursor_pos.1);
+            }
+            ClientCommand::NewLine => {
+                self.grid.place_character_in_grid(cols, '\n');
+            }
+            ClientCommand::Print(c) => {
+                self.grid.place_character_in_grid(cols, c);
             }
             ClientCommand::PutTab => {
                 let (row, col) = self.grid.cursor_pos;
@@ -319,31 +414,52 @@ impl WgpuApp {
                     }
                 }
             }
-            ClientCommand::SaveCursor => {
-                self.grid.save_cursor();
+            ClientCommand::ReportCursorPosition => self.send_raw_data(
+                format!(
+                    "\x1b[{};{}R",
+                    self.grid.cursor_pos.0 + 1,
+                    self.grid.cursor_pos.1 + 1
+                )
+                .as_bytes()
+                .to_vec(),
+            ),
+            ClientCommand::ResetColor(index) => {
+                self.grid.styles.color_array[index] = Color::DEFAULT_ARRAY[index];
             }
             ClientCommand::RestoreCursor => {
                 self.grid.restore_cursor();
+            }
+            ClientCommand::ReportCondition(healthy) => {
+                if healthy {
+                    self.send_raw_data(b"\x1b[0n".to_vec());
+                } else {
+                    self.send_raw_data(b"\x1b[3n".to_vec());
+                }
+            }
+            ClientCommand::ShowCursor => {
+                self.grid.show_cursor();
+            }
+            ClientCommand::SGR(command) => {
+                self.handle_sgr_attribute(command);
+            }
+            ClientCommand::SaveCursor => {
+                self.grid.save_cursor();
+            }
+            ClientCommand::SetTitle(title) => {
+                if let Some(title_str) = title {
+                    self.title = title_str.clone();
+                }
+
+                if let Some(window) = &self.window {
+                    window.set_title(&self.title);
+                }
             }
             ClientCommand::SwapScreenAndSetRestoreCursor => {
                 self.grid.saved_cursor_pos = self.grid.cursor_pos;
                 self.grid.swap_active_grid();
             }
-            ClientCommand::IdentifyTerminal(mode) => match mode {
-                IdentifyTerminalMode::Primary => {
-                    self.send_raw_data(b"\x1b[?6c".to_vec());
-                }
-                IdentifyTerminalMode::Secondary => {
-                    let version = "0.0.1";
-                    let text = format!("\x1b[>0;{version};1c");
-                    self.send_raw_data(text.as_bytes().to_vec());
-                }
-            },
             ClientCommand::SetColor(index, color) => {
                 self.grid.styles.color_array[index] = Color::Rgb(color.r, color.g, color.b);
-            }
-            ClientCommand::ResetColor(index) => {
-                self.grid.styles.color_array[index] = Color::DEFAULT_ARRAY[index];
             }
             ClientCommand::MoveCursorVerticalWithCarriageReturn(x) => {
                 let new_x = self.grid.cursor_pos.0 as i16 + x;
@@ -351,9 +467,6 @@ impl WgpuApp {
             }
             ClientCommand::HideCursor => {
                 self.grid.hide_cursor();
-            }
-            ClientCommand::DeleteLines(count) => {
-                self.grid.delete_lines(count as usize);
             }
             ClientCommand::SetCursorState(state) => {
                 self.grid.styles.cursor_state = state;
@@ -384,9 +497,6 @@ impl WgpuApp {
             }
             ClientCommand::InsertBlanks(count) => {
                 self.grid.insert_blanks(count as usize);
-            }
-            ClientCommand::DeleteChars(count) => {
-                self.grid.delete_chars(count as usize);
             }
             ClientCommand::SetDefaultForeground(rgb) => {
                 self.grid.styles.default_text_color = Color::Rgb(rgb.r, rgb.g, rgb.b);
@@ -457,22 +567,38 @@ impl WgpuApp {
             }
             PhysicalKey::Code(KeyCode::ArrowUp) => {
                 // Application mode: ESC O A, Normal mode: ESC [ A
-                let seq = if self.cursor_keys_mode { vec![27, 79, 65] } else { vec![27, 91, 65] };
+                let seq = if self.cursor_keys_mode {
+                    vec![27, 79, 65]
+                } else {
+                    vec![27, 91, 65]
+                };
                 self.send_raw_data(seq);
                 return;
             }
             PhysicalKey::Code(KeyCode::ArrowDown) => {
-                let seq = if self.cursor_keys_mode { vec![27, 79, 66] } else { vec![27, 91, 66] };
+                let seq = if self.cursor_keys_mode {
+                    vec![27, 79, 66]
+                } else {
+                    vec![27, 91, 66]
+                };
                 self.send_raw_data(seq);
                 return;
             }
             PhysicalKey::Code(KeyCode::ArrowLeft) => {
-                let seq = if self.cursor_keys_mode { vec![27, 79, 68] } else { vec![27, 91, 68] };
+                let seq = if self.cursor_keys_mode {
+                    vec![27, 79, 68]
+                } else {
+                    vec![27, 91, 68]
+                };
                 self.send_raw_data(seq);
                 return;
             }
             PhysicalKey::Code(KeyCode::ArrowRight) => {
-                let seq = if self.cursor_keys_mode { vec![27, 79, 67] } else { vec![27, 91, 67] };
+                let seq = if self.cursor_keys_mode {
+                    vec![27, 79, 67]
+                } else {
+                    vec![27, 91, 67]
+                };
                 self.send_raw_data(seq);
                 return;
             }
@@ -643,135 +769,38 @@ impl WgpuApp {
     }
 }
 
-impl ApplicationHandler for WgpuApp {
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        if self.window.is_none() {
-            let window_attributes = WindowAttributes::default()
-                .with_title("MTTY")
-                .with_inner_size(PhysicalSize::new(
-                    self.config.width as u32,
-                    self.config.height as u32,
-                ));
+/// Debounce duration for window resize events to avoid excessive grid/PTY updates
+const RESIZE_DEBOUNCE_MS: u64 = 50;
 
-            let window = Arc::new(
-                event_loop
-                    .create_window(window_attributes)
-                    .expect("Failed to create window"),
-            );
+/// Debug information displayed as an overlay
+pub struct DebugInfo {
+    /// Whether to show debug overlay (toggled with Ctrl+Shift+I)
+    pub show: bool,
+    /// Last time FPS was calculated
+    last_update: Instant,
+    /// Frame count since last FPS update
+    frame_count: u32,
+    /// Current FPS value
+    pub fps: f32,
+}
 
-            let renderer = Renderer::new(window.clone(), &self.config);
-
-            // Get actual cell dimensions from renderer and recalculate grid size
-            let (cell_width, cell_height) = renderer.cell_dimensions();
-            let new_cols = (self.config.width / cell_width).floor() as u16;
-            let new_rows = (self.config.height / cell_height).floor() as u16;
-
-            if new_cols != self.config.cols || new_rows != self.config.rows {
-                log::info!(
-                    "Updating grid size from {}x{} to {}x{} based on actual cell dimensions",
-                    self.config.cols,
-                    self.config.rows,
-                    new_cols,
-                    new_rows
-                );
-                self.config.cols = new_cols;
-                self.config.rows = new_rows;
-                self.grid = Grid::new(&self.config);
-
-                // Notify the PTY of the correct size
-                if let Err(e) = self.tx.send(ServerCommand::Resize(
-                    new_cols,
-                    new_rows,
-                    self.config.width as u16,
-                    self.config.height as u16,
-                )) {
-                    log::warn!("Failed to send resize command: {}", e);
-                }
-            }
-
-            self.window = Some(window);
-            self.renderer = Some(renderer);
+impl DebugInfo {
+    fn new() -> Self {
+        Self {
+            show: false,
+            last_update: Instant::now(),
+            frame_count: 0,
+            fps: 0.0,
         }
     }
 
-    fn window_event(
-        &mut self,
-        event_loop: &ActiveEventLoop,
-        _window_id: WindowId,
-        event: WindowEvent,
-    ) {
-        match event {
-            WindowEvent::CloseRequested => {
-                self.exit_flag
-                    .store(true, std::sync::atomic::Ordering::Relaxed);
-                event_loop.exit();
-            }
-            WindowEvent::Resized(new_size) => {
-                self.handle_resize(new_size);
-            }
-            WindowEvent::KeyboardInput { event, .. } => {
-                self.handle_keyboard_input(&event);
-            }
-            WindowEvent::ModifiersChanged(modifiers) => {
-                self.modifiers = modifiers.state();
-            }
-            WindowEvent::MouseWheel { delta, .. } => {
-                self.handle_mouse_wheel(delta);
-            }
-            WindowEvent::RedrawRequested => {
-                if let Some(renderer) = &mut self.renderer {
-                    match renderer.render(&mut self.grid, &self.debug_info) {
-                        Ok(_) => {
-                            self.debug_info.update();
-                        }
-                        Err(wgpu::SurfaceError::Lost) => {
-                            renderer.resize(renderer.size());
-                        }
-                        Err(wgpu::SurfaceError::OutOfMemory) => {
-                            log::error!("Out of memory");
-                            event_loop.exit();
-                        }
-                        Err(e) => {
-                            log::error!("Render error: {:?}", e);
-                        }
-                    }
-                }
-            }
-            _ => {}
+    fn update(&mut self) {
+        self.frame_count += 1;
+        let elapsed = self.last_update.elapsed();
+        if elapsed >= Duration::from_secs(1) {
+            self.fps = self.frame_count as f32 / elapsed.as_secs_f32();
+            self.frame_count = 0;
+            self.last_update = Instant::now();
         }
-    }
-
-    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
-        // Check if we should exit (e.g., shell process died)
-        if self.exit_flag.load(std::sync::atomic::Ordering::Relaxed) {
-            event_loop.exit();
-            return;
-        }
-
-        // Process incoming commands
-        self.process_commands();
-
-        // Process buffered input
-        self.process_input();
-
-        // Apply debounced resize if deadline has passed
-        if let Some(deadline) = self.resize_deadline {
-            if Instant::now() >= deadline {
-                self.apply_pending_resize();
-            }
-        }
-
-        // Request redraw when content has changed or debug overlay is shown (for FPS updates)
-        if self.grid.is_dirty() || self.debug_info.show {
-            if let Some(window) = &self.window {
-                window.request_redraw();
-            }
-        }
-
-        // Always use WaitUntil to avoid busy-looping - never use Poll
-        // 8ms gives ~120fps max which is responsive enough for typing
-        event_loop.set_control_flow(ControlFlow::WaitUntil(
-            Instant::now() + Duration::from_millis(8),
-        ));
     }
 }
