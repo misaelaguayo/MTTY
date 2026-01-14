@@ -387,6 +387,22 @@ impl WgpuApp {
             ClientCommand::DeleteChars(count) => {
                 self.grid.delete_chars(count as usize);
             }
+            ClientCommand::SetDefaultForeground(rgb) => {
+                self.grid.styles.default_text_color = Color::Rgb(rgb.r, rgb.g, rgb.b);
+                // Also update active if it's currently using the default
+                if matches!(self.grid.styles.active_text_color, Color::Foreground) {
+                    self.grid.styles.active_text_color = Color::Foreground;
+                }
+                self.grid.mark_all_dirty();
+            }
+            ClientCommand::SetDefaultBackground(rgb) => {
+                self.grid.styles.default_background_color = Color::Rgb(rgb.r, rgb.g, rgb.b);
+                // Also update active if it's currently using the default
+                if matches!(self.grid.styles.active_background_color, Color::Background) {
+                    self.grid.styles.active_background_color = Color::Background;
+                }
+                self.grid.mark_all_dirty();
+            }
             _ => {
                 log::info!("Unsupported command: {:?}", command);
             }

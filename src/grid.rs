@@ -123,7 +123,7 @@ impl Grid {
     }
 
     /// Marks all rows as dirty (for operations like screen clear, resize, swap)
-    fn mark_all_dirty(&mut self) {
+    pub fn mark_all_dirty(&mut self) {
         for dirty in &mut self.dirty_rows {
             if !*dirty {
                 *dirty = true;

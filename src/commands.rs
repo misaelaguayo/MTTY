@@ -127,4 +127,6 @@ pub enum ClientCommand {
     DeleteChars(i16),
     SetCursorState(CursorState),
     SetCursorShape(CursorShape),
+    SetDefaultForeground(Rgb),
+    SetDefaultBackground(Rgb),
 }

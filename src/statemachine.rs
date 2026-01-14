@@ -383,8 +383,47 @@ impl Handler for StateMachine {
         self.send(ClientCommand::SetColor(i, rgb));
     }
 
-    fn dynamic_color_sequence(&mut self, _: String, _: usize, _: &str) {
-        log::error!("Dynamic color sequence");
+    fn dynamic_color_sequence(&mut self, _prefix: String, index: usize, color: &str) {
+        log::debug!("Dynamic color sequence: index={}, color={}", index, color);
+
+        // Parse color string - formats like "#RRGGBB" or "rgb:RR/GG/BB" or "rgbi:R/G/B"
+        let rgb = if let Some(hex) = color.strip_prefix('#') {
+            // #RRGGBB format
+            if hex.len() >= 6 {
+                let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(0);
+                let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(0);
+                let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(0);
+                Some(Rgb { r, g, b })
+            } else {
+                None
+            }
+        } else if let Some(rgb_str) = color.strip_prefix("rgb:") {
+            // rgb:RR/GG/BB or rgb:RRRR/GGGG/BBBB format (X11 color spec)
+            let parts: Vec<&str> = rgb_str.split('/').collect();
+            if parts.len() == 3 {
+                // Take first 2 hex digits of each component (handles both 2 and 4 digit forms)
+                let r = u8::from_str_radix(&parts[0].chars().take(2).collect::<String>(), 16)
+                    .unwrap_or(0);
+                let g = u8::from_str_radix(&parts[1].chars().take(2).collect::<String>(), 16)
+                    .unwrap_or(0);
+                let b = u8::from_str_radix(&parts[2].chars().take(2).collect::<String>(), 16)
+                    .unwrap_or(0);
+                Some(Rgb { r, g, b })
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        if let Some(rgb) = rgb {
+            match index {
+                10 => self.send(ClientCommand::SetDefaultForeground(rgb)),
+                11 => self.send(ClientCommand::SetDefaultBackground(rgb)),
+                // Index 12 is cursor color, not implemented yet
+                _ => log::debug!("Unhandled dynamic color index: {}", index),
+            }
+        }
     }
 
     fn reset_color(&mut self, i: usize) {
