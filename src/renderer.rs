@@ -830,10 +830,10 @@ fn color_to_glyphon(color: Color, styles: &Styles) -> GlyphonColor {
         Color::BrightWhite => (255, 255, 255),
         Color::Rgb(r, g, b) => (r, g, b),
         Color::Foreground => {
-            return color_to_glyphon(styles.active_text_color, styles);
+            return color_to_glyphon(styles.default_text_color, styles);
         }
         Color::Background => {
-            return color_to_glyphon(styles.active_background_color, styles);
+            return color_to_glyphon(styles.default_background_color, styles);
         }
         Color::ColorIndex(i) => {
             return color_to_glyphon(styles.color_array[i as usize], styles);
@@ -862,10 +862,10 @@ fn color_to_rgba(color: Color, styles: &Styles) -> [f32; 4] {
         Color::BrightWhite => (255, 255, 255),
         Color::Rgb(r, g, b) => (r, g, b),
         Color::Foreground => {
-            return color_to_rgba(styles.active_text_color, styles);
+            return color_to_rgba(styles.default_text_color, styles);
         }
         Color::Background => {
-            return color_to_rgba(styles.active_background_color, styles);
+            return color_to_rgba(styles.default_background_color, styles);
         }
         Color::ColorIndex(i) => {
             return color_to_rgba(styles.color_array[i as usize], styles);

@@ -20,8 +20,8 @@ impl Default for Cell {
     fn default() -> Self {
         Self {
             char: ' ',
-            fg: Color::White,
-            bg: Color::Black,
+            fg: Color::Foreground,
+            bg: Color::Background,
             attrs: vec![SgrAttribute::default()],
         }
     }

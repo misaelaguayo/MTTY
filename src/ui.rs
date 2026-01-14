@@ -190,29 +190,12 @@ impl WgpuApp {
                 self.grid.styles.reverse = false;
             }
             SgrAttribute::CancelHidden => {}
-            SgrAttribute::Foreground(color) => match color {
-                Color::Foreground => {
-                    self.grid.styles.active_text_color = self.grid.styles.default_text_color
-                }
-                Color::Background => {
-                    self.grid.styles.active_text_color = self.grid.styles.default_background_color
-                }
-                _ => {
-                    self.grid.styles.active_text_color = color;
-                }
-            },
-            SgrAttribute::Background(color) => match color {
-                Color::Foreground => {
-                    self.grid.styles.active_background_color = self.grid.styles.default_text_color
-                }
-                Color::Background => {
-                    self.grid.styles.active_background_color =
-                        self.grid.styles.default_background_color
-                }
-                _ => {
-                    self.grid.styles.active_background_color = color;
-                }
-            },
+            SgrAttribute::Foreground(color) => {
+                self.grid.styles.active_text_color = color;
+            }
+            SgrAttribute::Background(color) => {
+                self.grid.styles.active_background_color = color;
+            }
             _ => {}
         }
     }

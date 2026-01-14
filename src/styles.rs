@@ -397,8 +397,8 @@ impl Styles {
             Color::BrightCyan => (0, 255, 255),
             Color::BrightWhite => (255, 255, 255),
             Color::Rgb(r, g, b) => (r, g, b),
-            Color::Foreground => return self.to_wgpu_color(self.active_text_color),
-            Color::Background => return self.to_wgpu_color(self.active_background_color),
+            Color::Foreground => return self.to_wgpu_color(self.default_text_color),
+            Color::Background => return self.to_wgpu_color(self.default_background_color),
             Color::ColorIndex(i) => return self.to_wgpu_color(self.color_array[i as usize]),
         };
         [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, 1.0]
@@ -424,17 +424,17 @@ impl Styles {
             Color::BrightCyan => (0, 255, 255),
             Color::BrightWhite => (255, 255, 255),
             Color::Rgb(r, g, b) => (r, g, b),
-            Color::Foreground => self.to_rgb(self.active_text_color),
-            Color::Background => self.to_rgb(self.active_background_color),
+            Color::Foreground => self.to_rgb(self.default_text_color),
+            Color::Background => self.to_rgb(self.default_background_color),
             Color::ColorIndex(i) => self.to_rgb(self.color_array[i as usize]),
         }
     }
 
     pub fn default() -> Self {
         Self {
-            active_background_color: Color::Black,
+            active_background_color: Color::Background,
             default_background_color: Color::Black,
-            active_text_color: Color::White,
+            active_text_color: Color::Foreground,
             default_text_color: Color::White,
             font_size: 16,
             italic: false,
