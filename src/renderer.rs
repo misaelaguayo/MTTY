@@ -195,12 +195,13 @@ impl Renderer {
             (adapter, device, queue)
         });
 
-        // Configure surface
+        // Configure surface - prefer non-sRGB format to avoid double gamma correction
+        // Terminal colors from applications are already in sRGB space
         let surface_caps = surface.get_capabilities(&adapter);
         let surface_format = surface_caps
             .formats
             .iter()
-            .find(|f| f.is_srgb())
+            .find(|f| !f.is_srgb())
             .copied()
             .unwrap_or(surface_caps.formats[0]);
 
@@ -469,12 +470,14 @@ impl Renderer {
                 let num_quads = row_vertex_count / 4;
                 for quad in 0..num_quads {
                     let base = vertex_offset + quad * 4;
+                    // CCW winding order for front-facing triangles
+                    // Vertices: 0=top-left, 1=top-right, 2=bottom-right, 3=bottom-left
                     self.combined_bg_indices.push(base);
-                    self.combined_bg_indices.push(base + 1);
-                    self.combined_bg_indices.push(base + 2);
-                    self.combined_bg_indices.push(base);
-                    self.combined_bg_indices.push(base + 2);
                     self.combined_bg_indices.push(base + 3);
+                    self.combined_bg_indices.push(base + 2);
+                    self.combined_bg_indices.push(base);
+                    self.combined_bg_indices.push(base + 2);
+                    self.combined_bg_indices.push(base + 1);
                 }
                 vertex_offset += row_vertex_count;
 
@@ -727,11 +730,11 @@ impl Renderer {
 
                 // Get background color
                 let bg_color = color_to_rgba(cell.bg, styles);
-
                 // Only render backgrounds that differ from the default (optimization)
                 let colors_differ = (bg_color[0] - default_bg[0]).abs() > 0.01
                     || (bg_color[1] - default_bg[1]).abs() > 0.01
                     || (bg_color[2] - default_bg[2]).abs() > 0.01;
+
                 if colors_differ {
                     // Convert to normalized device coordinates (-1 to 1)
                     let x0 = (x / width) * 2.0 - 1.0;

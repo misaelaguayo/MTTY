@@ -191,6 +191,7 @@ impl WgpuApp {
             }
             SgrAttribute::CancelHidden => {}
             SgrAttribute::Foreground(color) => {
+                log::debug!("SGR Foreground: {:?}", color);
                 self.grid.styles.active_text_color = color;
             }
             SgrAttribute::Background(color) => {
