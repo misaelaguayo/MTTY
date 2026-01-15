@@ -844,6 +844,16 @@ fn color_to_glyphon(color: Color, styles: &Styles) -> GlyphonColor {
     GlyphonColor::rgb(r, g, b)
 }
 
+/// Convert sRGB component (0-255) to linear color space for GPU rendering
+fn srgb_to_linear(srgb: u8) -> f32 {
+    let s = srgb as f32 / 255.0;
+    if s <= 0.04045 {
+        s / 12.92
+    } else {
+        ((s + 0.055) / 1.055).powf(2.4)
+    }
+}
+
 fn color_to_rgba(color: Color, styles: &Styles) -> [f32; 4] {
     let (r, g, b) = match color {
         Color::Black => (0, 0, 0),
@@ -873,5 +883,6 @@ fn color_to_rgba(color: Color, styles: &Styles) -> [f32; 4] {
             return color_to_rgba(styles.color_array[i as usize], styles);
         }
     };
-    [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0, 1.0]
+    // Convert sRGB to linear for the sRGB surface format (GPU will convert back to sRGB on output)
+    [srgb_to_linear(r), srgb_to_linear(g), srgb_to_linear(b), 1.0]
 }
