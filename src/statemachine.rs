@@ -318,7 +318,7 @@ impl Handler for StateMachine {
                 self.send(ClientCommand::ShowCursor);
             }
             PrivateMode::Named(NamedPrivateMode::SwapScreenAndSetRestoreCursor) => {
-                self.send(ClientCommand::SwapScreenAndSetRestoreCursor);
+                self.send(ClientCommand::SwapScreenAndSetRestoreCursor(true));
             }
             PrivateMode::Named(NamedPrivateMode::CursorKeys) => {
                 self.send(ClientCommand::CursorKeysMode(true));
@@ -339,7 +339,7 @@ impl Handler for StateMachine {
                 self.send(ClientCommand::HideCursor);
             }
             PrivateMode::Named(NamedPrivateMode::SwapScreenAndSetRestoreCursor) => {
-                self.send(ClientCommand::SwapScreenAndSetRestoreCursor);
+                self.send(ClientCommand::SwapScreenAndSetRestoreCursor(false));
             }
             PrivateMode::Named(NamedPrivateMode::CursorKeys) => {
                 self.send(ClientCommand::CursorKeysMode(false));

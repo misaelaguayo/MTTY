@@ -31,6 +31,10 @@ pub struct Args {
     /// Replay a recording file instead of starting a normal terminal session
     #[arg(long, value_name = "FILE")]
     pub replay: Option<PathBuf>,
+
+    /// Start recording immediately when the terminal launches
+    #[arg(long)]
+    pub record: bool,
 }
 
 #[tokio::main]
@@ -62,6 +66,7 @@ async fn main() -> Result<(), std::io::Error> {
             &app.is_running,
             &app.server_channel.input_transmitter,
             &app.client_channel.output_receiver,
+            args.record,
         );
     }
 
@@ -73,6 +78,7 @@ fn start_ui(
     exit_flag: &Arc<AtomicBool>,
     tx: &Sender<ServerCommand>,
     ui_update_receiver: &Receiver<ClientCommand>,
+    auto_record: bool,
 ) {
     let runner = WgpuRunner::new(
         exit_flag.clone(),
@@ -80,6 +86,7 @@ fn start_ui(
         tx.clone(),
         ui_update_receiver.resubscribe(),
         None,
+        auto_record,
     );
 
     runner.run();
@@ -102,7 +109,7 @@ fn start_replay_ui(config: &Config, replay_path: &PathBuf) {
     let (tx, _) = tokio::sync::broadcast::channel::<ServerCommand>(1);
     let (_, rx) = tokio::sync::broadcast::channel::<ClientCommand>(1);
 
-    let runner = WgpuRunner::new(exit_flag, config.clone(), tx, rx, Some(player));
+    let runner = WgpuRunner::new(exit_flag, config.clone(), tx, rx, Some(player), false);
 
     runner.run();
 }

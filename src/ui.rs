@@ -39,6 +39,7 @@ pub struct WgpuRunner {
     pub tx: Sender<ServerCommand>,
     pub rx: Receiver<ClientCommand>,
     pub player: Option<Player>,
+    pub auto_record: bool,
 }
 
 impl WgpuRunner {
@@ -48,6 +49,7 @@ impl WgpuRunner {
         tx: Sender<ServerCommand>,
         rx: Receiver<ClientCommand>,
         player: Option<Player>,
+        auto_record: bool,
     ) -> Self {
         Self {
             exit_flag,
@@ -55,6 +57,7 @@ impl WgpuRunner {
             tx,
             rx,
             player,
+            auto_record,
         }
     }
 }
@@ -72,6 +75,7 @@ impl Runner for WgpuRunner {
             self.tx.clone(),
             self.rx.resubscribe(),
             self.player,
+            self.auto_record,
         );
 
         event_loop.run_app(&mut app).expect("Event loop failed");
@@ -271,6 +275,7 @@ impl WgpuApp {
         tx: Sender<ServerCommand>,
         rx: Receiver<ClientCommand>,
         player: Option<Player>,
+        auto_record: bool,
     ) -> Self {
         log::info!("Grid size: {} x {}", config.rows, config.cols);
 
@@ -281,8 +286,18 @@ impl WgpuApp {
             grid.restore_from_snapshot(initial);
             let title = format!("MTTY - Replay (0/{})", p.total_events());
             (grid, title)
+        } else if auto_record {
+            (Grid::new(config), "MTTY - Recording".to_string())
         } else {
             (Grid::new(config), title.to_string())
+        };
+
+        // Initialize recorder if auto_record is enabled (and not in replay mode)
+        let recorder = if auto_record && player.is_none() {
+            log::info!("Auto-recording started");
+            Some(Recorder::new(&grid))
+        } else {
+            None
         };
 
         Self {
@@ -301,7 +316,7 @@ impl WgpuApp {
             debug_info: DebugInfo::new(),
             cursor_keys_mode: false,
             bracketed_paste_mode: false,
-            recorder: None,
+            recorder,
             player,
             replay_playing: false,
             replay_speed: 1,
@@ -527,9 +542,19 @@ impl WgpuApp {
                     window.set_title(&self.title);
                 }
             }
-            ClientCommand::SwapScreenAndSetRestoreCursor => {
-                self.grid.saved_cursor_pos = self.grid.cursor_pos;
-                self.grid.swap_active_grid();
+            ClientCommand::SwapScreenAndSetRestoreCursor(enter) => {
+                if enter {
+                    // Entering alternate screen: save cursor, switch, clear
+                    self.grid.saved_cursor_pos = self.grid.cursor_pos;
+                    self.grid.swap_active_grid();
+                    self.grid.clear_screen();
+                    self.grid.set_pos(0, 0);
+                } else {
+                    // Exiting alternate screen: switch back, restore cursor
+                    self.grid.swap_active_grid();
+                    self.grid.cursor_pos = self.grid.saved_cursor_pos;
+                    self.grid.mark_all_dirty();
+                }
             }
             ClientCommand::SetColor(index, color) => {
                 self.grid.styles.color_array[index] = Color::Rgb(color.r, color.g, color.b);

@@ -146,7 +146,8 @@ pub enum ClientCommand {
     SaveCursor,
     SetColor(usize, SerializableRgb),
     ShowCursor,
-    SwapScreenAndSetRestoreCursor,
+    /// Enter (true) or exit (false) alternate screen with cursor save/restore
+    SwapScreenAndSetRestoreCursor(bool),
     DeleteLines(i16),
     InsertBlankLines(i16),
     ScrollUp(i16),
