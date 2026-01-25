@@ -40,8 +40,7 @@ impl Recording {
 
     pub fn load_from_file(path: &PathBuf) -> io::Result<Self> {
         let content = fs::read_to_string(path)?;
-        serde_json::from_str(&content)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+        serde_json::from_str(&content).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
     }
 }
 

@@ -102,13 +102,7 @@ fn start_replay_ui(config: &Config, replay_path: &PathBuf) {
     let (tx, _) = tokio::sync::broadcast::channel::<ServerCommand>(1);
     let (_, rx) = tokio::sync::broadcast::channel::<ClientCommand>(1);
 
-    let runner = WgpuRunner::new(
-        exit_flag,
-        config.clone(),
-        tx,
-        rx,
-        Some(player),
-    );
+    let runner = WgpuRunner::new(exit_flag, config.clone(), tx, rx, Some(player));
 
     runner.run();
 }

@@ -50,15 +50,15 @@ impl TerminalSnapshot {
 
     pub fn load_from_file(path: &PathBuf) -> io::Result<Self> {
         let content = fs::read_to_string(path)?;
-        serde_json::from_str(&content)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+        serde_json::from_str(&content).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
     }
 }
 
 /// Get the debug output directory, creating it if it doesn't exist
 pub fn get_debug_dir() -> io::Result<PathBuf> {
-    let config_dir = dirs::config_dir()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Could not find config directory"))?;
+    let config_dir = dirs::config_dir().ok_or_else(|| {
+        io::Error::new(io::ErrorKind::NotFound, "Could not find config directory")
+    })?;
     let debug_dir = config_dir.join("mtty").join("debug");
     fs::create_dir_all(&debug_dir)?;
     Ok(debug_dir)

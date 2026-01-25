@@ -407,7 +407,9 @@ impl Grid {
     pub fn set_scroll_region(&mut self, top: usize, bottom: Option<usize>) {
         // Terminal uses 1-indexed, convert to 0-indexed
         let top = top.saturating_sub(1);
-        let bottom = bottom.map(|b| b.saturating_sub(1)).unwrap_or(self.height as usize - 1);
+        let bottom = bottom
+            .map(|b| b.saturating_sub(1))
+            .unwrap_or(self.height as usize - 1);
         self.scroll_region = (top, bottom.min(self.height as usize - 1));
         // Move cursor to home position when scroll region is set
         self.set_pos(0, 0);
@@ -426,9 +428,15 @@ impl Grid {
         }
 
         let (fg, bg) = if self.styles.reverse {
-            (self.styles.active_background_color, self.styles.active_text_color)
+            (
+                self.styles.active_background_color,
+                self.styles.active_text_color,
+            )
         } else {
-            (self.styles.active_text_color, self.styles.active_background_color)
+            (
+                self.styles.active_text_color,
+                self.styles.active_background_color,
+            )
         };
 
         let grid = self.active_grid();
@@ -470,9 +478,15 @@ impl Grid {
         }
 
         let (fg, bg) = if self.styles.reverse {
-            (self.styles.active_background_color, self.styles.active_text_color)
+            (
+                self.styles.active_background_color,
+                self.styles.active_text_color,
+            )
         } else {
-            (self.styles.active_text_color, self.styles.active_background_color)
+            (
+                self.styles.active_text_color,
+                self.styles.active_background_color,
+            )
         };
 
         let grid = self.active_grid();
@@ -507,9 +521,15 @@ impl Grid {
         let width = self.width as usize;
 
         let (fg, bg) = if self.styles.reverse {
-            (self.styles.active_background_color, self.styles.active_text_color)
+            (
+                self.styles.active_background_color,
+                self.styles.active_text_color,
+            )
         } else {
-            (self.styles.active_text_color, self.styles.active_background_color)
+            (
+                self.styles.active_text_color,
+                self.styles.active_background_color,
+            )
         };
 
         let grid = self.active_grid();
@@ -540,9 +560,15 @@ impl Grid {
         let count = count.min(region_height);
 
         let (fg, bg) = if self.styles.reverse {
-            (self.styles.active_background_color, self.styles.active_text_color)
+            (
+                self.styles.active_background_color,
+                self.styles.active_text_color,
+            )
         } else {
-            (self.styles.active_text_color, self.styles.active_background_color)
+            (
+                self.styles.active_text_color,
+                self.styles.active_background_color,
+            )
         };
 
         let grid = self.active_grid();
@@ -587,9 +613,15 @@ impl Grid {
         let count = count.min(region_height);
 
         let (fg, bg) = if self.styles.reverse {
-            (self.styles.active_background_color, self.styles.active_text_color)
+            (
+                self.styles.active_background_color,
+                self.styles.active_text_color,
+            )
         } else {
-            (self.styles.active_text_color, self.styles.active_background_color)
+            (
+                self.styles.active_text_color,
+                self.styles.active_background_color,
+            )
         };
 
         let grid = self.active_grid();
@@ -639,9 +671,15 @@ impl Grid {
         let width = self.width as usize;
 
         let (fg, bg) = if self.styles.reverse {
-            (self.styles.active_background_color, self.styles.active_text_color)
+            (
+                self.styles.active_background_color,
+                self.styles.active_text_color,
+            )
         } else {
-            (self.styles.active_text_color, self.styles.active_background_color)
+            (
+                self.styles.active_text_color,
+                self.styles.active_background_color,
+            )
         };
 
         let grid = self.active_grid();
@@ -652,7 +690,11 @@ impl Grid {
         for i in (col + count..width).rev() {
             let dest_idx = row_start + i;
             let src_idx = row_start + i - count;
-            if dest_idx < row_end && src_idx < row_end && dest_idx < grid.len() && src_idx < grid.len() {
+            if dest_idx < row_end
+                && src_idx < row_end
+                && dest_idx < grid.len()
+                && src_idx < grid.len()
+            {
                 grid[dest_idx] = grid[src_idx].clone();
             }
         }
@@ -674,9 +716,15 @@ impl Grid {
         let width = self.width as usize;
 
         let (fg, bg) = if self.styles.reverse {
-            (self.styles.active_background_color, self.styles.active_text_color)
+            (
+                self.styles.active_background_color,
+                self.styles.active_text_color,
+            )
         } else {
-            (self.styles.active_text_color, self.styles.active_background_color)
+            (
+                self.styles.active_text_color,
+                self.styles.active_background_color,
+            )
         };
 
         let grid = self.active_grid();

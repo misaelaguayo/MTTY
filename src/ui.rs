@@ -105,6 +105,10 @@ pub struct WgpuApp {
     player: Option<Player>,
     /// Whether replay is currently playing automatically
     replay_playing: bool,
+    /// Replay speed: 1 = 1 command, 2 = 10 commands, 3 = 100 commands, etc.
+    replay_speed: usize,
+    /// Last command executed during replay
+    last_replay_command: Option<ClientCommand>,
 }
 
 impl ApplicationHandler for WgpuApp {
@@ -300,6 +304,8 @@ impl WgpuApp {
             recorder: None,
             player,
             replay_playing: false,
+            replay_speed: 1,
+            last_replay_command: None,
         }
     }
 
@@ -583,22 +589,14 @@ impl WgpuApp {
             }
             ClientCommand::ReportTextAreaSizeChars => {
                 // CSI 8 ; rows ; cols t - Report text area size in characters
-                let response = format!(
-                    "\x1b[8;{};{}t",
-                    self.grid.height,
-                    self.grid.width
-                );
+                let response = format!("\x1b[8;{};{}t", self.grid.height, self.grid.width);
                 self.send_raw_data(response.as_bytes().to_vec());
             }
             ClientCommand::ReportTextAreaSizePixels => {
                 // CSI 4 ; height ; width t - Report text area size in pixels
                 if let Some(renderer) = &self.renderer {
                     let size = renderer.size();
-                    let response = format!(
-                        "\x1b[4;{};{}t",
-                        size.height,
-                        size.width
-                    );
+                    let response = format!("\x1b[4;{};{}t", size.height, size.width);
                     self.send_raw_data(response.as_bytes().to_vec());
                 }
             }
@@ -665,7 +663,8 @@ impl WgpuApp {
                 }
                 PhysicalKey::Code(KeyCode::Escape) => {
                     // Exit replay mode
-                    self.exit_flag.store(true, std::sync::atomic::Ordering::Relaxed);
+                    self.exit_flag
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
                     return;
                 }
                 // Toggle debug overlay even in replay mode
@@ -676,6 +675,52 @@ impl WgpuApp {
                     if let Some(window) = &self.window {
                         window.request_redraw();
                     }
+                    return;
+                }
+                // Replay speed controls: 1-9
+                PhysicalKey::Code(KeyCode::Digit1) => {
+                    self.replay_speed = 1;
+                    self.update_replay_title();
+                    return;
+                }
+                PhysicalKey::Code(KeyCode::Digit2) => {
+                    self.replay_speed = 2;
+                    self.update_replay_title();
+                    return;
+                }
+                PhysicalKey::Code(KeyCode::Digit3) => {
+                    self.replay_speed = 3;
+                    self.update_replay_title();
+                    return;
+                }
+                PhysicalKey::Code(KeyCode::Digit4) => {
+                    self.replay_speed = 4;
+                    self.update_replay_title();
+                    return;
+                }
+                PhysicalKey::Code(KeyCode::Digit5) => {
+                    self.replay_speed = 5;
+                    self.update_replay_title();
+                    return;
+                }
+                PhysicalKey::Code(KeyCode::Digit6) => {
+                    self.replay_speed = 6;
+                    self.update_replay_title();
+                    return;
+                }
+                PhysicalKey::Code(KeyCode::Digit7) => {
+                    self.replay_speed = 7;
+                    self.update_replay_title();
+                    return;
+                }
+                PhysicalKey::Code(KeyCode::Digit8) => {
+                    self.replay_speed = 8;
+                    self.update_replay_title();
+                    return;
+                }
+                PhysicalKey::Code(KeyCode::Digit9) => {
+                    self.replay_speed = 9;
+                    self.update_replay_title();
                     return;
                 }
                 _ => {}
@@ -964,20 +1009,55 @@ impl WgpuApp {
     }
 
     fn replay_step_forward(&mut self) {
-        if let Some(ref mut player) = self.player {
-            if let Some(command) = player.step_forward() {
-                let cmd = command.clone();
-                self.handle_command(cmd);
-                self.update_replay_title();
+        // Calculate number of commands to process based on speed
+        // 1 = 1, 2 = 10, 3 = 100, 4 = 1000, etc.
+        let commands_to_process = if self.replay_speed == 1 {
+            1
+        } else {
+            10_usize.pow(self.replay_speed as u32 - 1)
+        };
+
+        // Collect commands first to avoid borrow issues
+        let commands: Vec<ClientCommand> = if let Some(ref mut player) = self.player {
+            let mut cmds = Vec::new();
+            for _ in 0..commands_to_process {
+                if let Some(command) = player.step_forward() {
+                    cmds.push(command.clone());
+                } else {
+                    break;
+                }
             }
+            cmds
+        } else {
+            Vec::new()
+        };
+
+        // Now process the commands
+        for cmd in commands {
+            self.last_replay_command = Some(cmd.clone());
+            self.handle_command(cmd);
+        }
+
+        if self.player.is_some() {
+            self.update_replay_title();
         }
     }
 
     fn replay_step_backward(&mut self) {
+        // Calculate number of commands to go back based on speed
+        let commands_to_go_back = if self.replay_speed == 1 {
+            1
+        } else {
+            10_usize.pow(self.replay_speed as u32 - 1)
+        };
+
         // First, collect the data we need from the player
         let replay_data = if let Some(ref mut player) = self.player {
-            if player.step_backward() {
-                let target_pos = player.position();
+            let current_pos = player.position();
+            // Calculate target position, ensuring we don't go below 0
+            let target_pos = current_pos.saturating_sub(commands_to_go_back);
+
+            if target_pos < current_pos {
                 let initial = player.initial_state().clone();
                 player.reset();
 
@@ -988,6 +1068,8 @@ impl WgpuApp {
                         commands.push(command.clone());
                     }
                 }
+                // Seek player to target position
+                player.seek(target_pos);
                 Some((initial, commands))
             } else {
                 None
@@ -999,8 +1081,15 @@ impl WgpuApp {
         // Now replay with full ownership of self
         if let Some((initial, commands)) = replay_data {
             self.grid.restore_from_snapshot(&initial);
-            for cmd in commands {
-                self.handle_command(cmd);
+            // Clear last command if going back to start
+            if commands.is_empty() {
+                self.last_replay_command = None;
+            } else {
+                // Track the last command as we replay
+                for cmd in commands {
+                    self.last_replay_command = Some(cmd.clone());
+                    self.handle_command(cmd);
+                }
             }
             self.update_replay_title();
         }
@@ -1012,18 +1101,40 @@ impl WgpuApp {
             self.grid.restore_from_snapshot(&initial);
             player.reset();
             self.replay_playing = false;
+            self.last_replay_command = None;
             self.update_replay_title();
         }
     }
 
     fn update_replay_title(&mut self) {
         if let Some(ref player) = self.player {
-            let status = if self.replay_playing { "Playing" } else { "Paused" };
+            let status = if self.replay_playing {
+                "Playing"
+            } else {
+                "Paused"
+            };
+            let speed_str = if self.replay_speed == 1 {
+                "1".to_string()
+            } else {
+                format!("10^{}", self.replay_speed - 1)
+            };
+            let last_cmd = match &self.last_replay_command {
+                Some(cmd) => format!("{:?}", cmd),
+                None => "None".to_string(),
+            };
+            // Truncate command display if too long
+            let last_cmd_display = if last_cmd.len() > 50 {
+                format!("{}...", &last_cmd[..47])
+            } else {
+                last_cmd
+            };
             self.title = format!(
-                "MTTY - Replay [{}/{}] {}",
+                "MTTY - Replay [{}/{}] {} (x{}) | {}",
                 player.position(),
                 player.total_events(),
-                status
+                status,
+                speed_str,
+                last_cmd_display
             );
             if let Some(window) = &self.window {
                 window.set_title(&self.title);
