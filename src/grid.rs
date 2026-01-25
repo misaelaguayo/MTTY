@@ -4,6 +4,7 @@ use crate::{
     styles::{Color, Styles},
 };
 use std::fmt;
+use unicode_width::UnicodeWidthChar;
 
 #[cfg(test)]
 mod tests;
@@ -258,7 +259,11 @@ impl Grid {
     pub fn place_character_in_grid(&mut self, cols: u16, c: char) {
         let (mut row, mut col) = self.cursor_pos;
 
-        if col >= cols as usize {
+        // Get character display width (0 for control chars, 1 for normal, 2 for wide/emoji)
+        let char_width = c.width().unwrap_or(0);
+
+        // Check if we need to wrap (accounting for wide characters)
+        if col >= cols as usize || (char_width == 2 && col + 1 >= cols as usize) {
             self.set_pos(row + 1, 0);
         }
 
@@ -284,6 +289,11 @@ impl Grid {
                 self.set_pos(row, 0);
             }
             _ => {
+                // Skip zero-width characters (combining marks, etc.)
+                if char_width == 0 {
+                    return;
+                }
+
                 // Calculate the index in the flat vector
                 let index = row * (self.width as usize) + col;
                 let active_grid_len = self.active_grid().len();
@@ -291,9 +301,20 @@ impl Grid {
                     self.add_rows(row - (active_grid_len / (self.width as usize)) + 1);
                 }
                 self.active_grid()[index] = Cell::new(c, fg, bg);
+
+                // For wide characters (width 2), place a placeholder in the next cell
+                if char_width == 2 && col + 1 < self.width as usize {
+                    let next_index = index + 1;
+                    if next_index < self.active_grid().len() {
+                        // Use a space as placeholder for the second half of wide char
+                        self.active_grid()[next_index] = Cell::new(' ', fg, bg);
+                    }
+                }
+
                 // Mark the specific row as dirty
                 self.mark_row_dirty(row);
-                self.set_pos(row, col + 1);
+                // Advance cursor by character width
+                self.set_pos(row, col + char_width);
             }
         }
     }
