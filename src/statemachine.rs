@@ -452,11 +452,13 @@ impl Handler for StateMachine {
     }
 
     fn text_area_size_pixels(&mut self) {
-        log::error!("Text area size pixels");
+        log::debug!("Text area size pixels");
+        self.send(ClientCommand::ReportTextAreaSizePixels);
     }
 
     fn text_area_size_chars(&mut self) {
-        log::error!("Text area size chars");
+        log::debug!("Text area size chars");
+        self.send(ClientCommand::ReportTextAreaSizeChars);
     }
 
     fn set_hyperlink(&mut self, _: Option<Hyperlink>) {

@@ -130,4 +130,6 @@ pub enum ClientCommand {
     SetCursorShape(CursorShape),
     SetDefaultForeground(Rgb),
     SetDefaultBackground(Rgb),
+    ReportTextAreaSizeChars,
+    ReportTextAreaSizePixels,
 }

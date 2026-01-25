@@ -514,6 +514,27 @@ impl WgpuApp {
                 }
                 self.grid.mark_all_dirty();
             }
+            ClientCommand::ReportTextAreaSizeChars => {
+                // CSI 8 ; rows ; cols t - Report text area size in characters
+                let response = format!(
+                    "\x1b[8;{};{}t",
+                    self.grid.height,
+                    self.grid.width
+                );
+                self.send_raw_data(response.as_bytes().to_vec());
+            }
+            ClientCommand::ReportTextAreaSizePixels => {
+                // CSI 4 ; height ; width t - Report text area size in pixels
+                if let Some(renderer) = &self.renderer {
+                    let size = renderer.size();
+                    let response = format!(
+                        "\x1b[4;{};{}t",
+                        size.height,
+                        size.width
+                    );
+                    self.send_raw_data(response.as_bytes().to_vec());
+                }
+            }
             _ => {
                 log::info!("Unsupported command: {:?}", command);
             }
@@ -558,7 +579,8 @@ impl WgpuApp {
         // Handle special keys
         match event.physical_key {
             PhysicalKey::Code(KeyCode::Backspace) => {
-                self.send_raw_data(vec![8]);
+                // Send DEL (127) for xterm-256color compatibility, not Ctrl+H (8)
+                self.send_raw_data(vec![127]);
                 return;
             }
             PhysicalKey::Code(KeyCode::Escape) => {
@@ -630,33 +652,40 @@ impl WgpuApp {
         }
 
         // Handle Ctrl+key combinations using physical key codes
+        // Ctrl+A=1, Ctrl+B=2, ..., Ctrl+Z=26
         if self.modifiers.control_key() {
-            match event.physical_key {
-                PhysicalKey::Code(KeyCode::KeyC) => {
-                    self.send_raw_data(vec![3]);
-                    return;
-                }
-                PhysicalKey::Code(KeyCode::KeyD) => {
-                    self.send_raw_data(vec![4]);
-                    return;
-                }
-                PhysicalKey::Code(KeyCode::KeyL) => {
-                    self.send_raw_data(vec![12]);
-                    return;
-                }
-                PhysicalKey::Code(KeyCode::KeyU) => {
-                    self.send_raw_data(vec![21]);
-                    return;
-                }
-                PhysicalKey::Code(KeyCode::KeyW) => {
-                    self.send_raw_data(vec![23]);
-                    return;
-                }
-                PhysicalKey::Code(KeyCode::KeyZ) => {
-                    self.send_raw_data(vec![26]);
-                    return;
-                }
-                _ => {}
+            let ctrl_code = match event.physical_key {
+                PhysicalKey::Code(KeyCode::KeyA) => Some(1),
+                PhysicalKey::Code(KeyCode::KeyB) => Some(2),
+                PhysicalKey::Code(KeyCode::KeyC) => Some(3),
+                PhysicalKey::Code(KeyCode::KeyD) => Some(4),
+                PhysicalKey::Code(KeyCode::KeyE) => Some(5),
+                PhysicalKey::Code(KeyCode::KeyF) => Some(6),
+                PhysicalKey::Code(KeyCode::KeyG) => Some(7),
+                PhysicalKey::Code(KeyCode::KeyH) => Some(8),
+                PhysicalKey::Code(KeyCode::KeyI) => Some(9),
+                PhysicalKey::Code(KeyCode::KeyJ) => Some(10),
+                PhysicalKey::Code(KeyCode::KeyK) => Some(11),
+                PhysicalKey::Code(KeyCode::KeyL) => Some(12),
+                PhysicalKey::Code(KeyCode::KeyM) => Some(13),
+                PhysicalKey::Code(KeyCode::KeyN) => Some(14),
+                PhysicalKey::Code(KeyCode::KeyO) => Some(15),
+                PhysicalKey::Code(KeyCode::KeyP) => Some(16),
+                PhysicalKey::Code(KeyCode::KeyQ) => Some(17),
+                PhysicalKey::Code(KeyCode::KeyR) => Some(18),
+                PhysicalKey::Code(KeyCode::KeyS) => Some(19),
+                PhysicalKey::Code(KeyCode::KeyT) => Some(20),
+                PhysicalKey::Code(KeyCode::KeyU) => Some(21),
+                PhysicalKey::Code(KeyCode::KeyV) => Some(22),
+                PhysicalKey::Code(KeyCode::KeyW) => Some(23),
+                PhysicalKey::Code(KeyCode::KeyX) => Some(24),
+                PhysicalKey::Code(KeyCode::KeyY) => Some(25),
+                PhysicalKey::Code(KeyCode::KeyZ) => Some(26),
+                _ => None,
+            };
+            if let Some(code) = ctrl_code {
+                self.send_raw_data(vec![code]);
+                return;
             }
         }
 
