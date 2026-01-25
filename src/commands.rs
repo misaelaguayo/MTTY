@@ -1,14 +1,43 @@
+use serde::{Deserialize, Serialize};
 use vte::ansi::{Attr, Rgb};
 
 use crate::styles::{Color, CursorShape, CursorState};
 
-#[derive(Debug, Clone)]
+/// Serializable wrapper for vte::ansi::Rgb
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct SerializableRgb {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+}
+
+impl From<Rgb> for SerializableRgb {
+    fn from(rgb: Rgb) -> Self {
+        Self {
+            r: rgb.r,
+            g: rgb.g,
+            b: rgb.b,
+        }
+    }
+}
+
+impl From<SerializableRgb> for Rgb {
+    fn from(rgb: SerializableRgb) -> Self {
+        Self {
+            r: rgb.r,
+            g: rgb.g,
+            b: rgb.b,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum IdentifyTerminalMode {
     Primary,
     Secondary,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SgrAttribute {
     Reset,
     Bold,
@@ -75,13 +104,13 @@ impl SgrAttribute {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ServerCommand {
     Resize(u16, u16, u16, u16),
     RawData(Vec<u8>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ClientCommand {
     SetTitle(Option<String>),
     AlternateScreenBuffer(bool),
@@ -115,7 +144,7 @@ pub enum ClientCommand {
     RestoreCursor,
     SGR(SgrAttribute),
     SaveCursor,
-    SetColor(usize, Rgb),
+    SetColor(usize, SerializableRgb),
     ShowCursor,
     SwapScreenAndSetRestoreCursor,
     DeleteLines(i16),
@@ -128,8 +157,8 @@ pub enum ClientCommand {
     DeleteChars(i16),
     SetCursorState(CursorState),
     SetCursorShape(CursorShape),
-    SetDefaultForeground(Rgb),
-    SetDefaultBackground(Rgb),
+    SetDefaultForeground(SerializableRgb),
+    SetDefaultBackground(SerializableRgb),
     ReportTextAreaSizeChars,
     ReportTextAreaSizePixels,
 }

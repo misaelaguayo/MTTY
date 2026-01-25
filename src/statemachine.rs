@@ -380,7 +380,7 @@ impl Handler for StateMachine {
 
     fn set_color(&mut self, i: usize, rgb: Rgb) {
         log::debug!("Set color: {} {:?}", i, rgb);
-        self.send(ClientCommand::SetColor(i, rgb));
+        self.send(ClientCommand::SetColor(i, rgb.into()));
     }
 
     fn dynamic_color_sequence(&mut self, _prefix: String, index: usize, color: &str) {
@@ -418,8 +418,8 @@ impl Handler for StateMachine {
 
         if let Some(rgb) = rgb {
             match index {
-                10 => self.send(ClientCommand::SetDefaultForeground(rgb)),
-                11 => self.send(ClientCommand::SetDefaultBackground(rgb)),
+                10 => self.send(ClientCommand::SetDefaultForeground(rgb.into())),
+                11 => self.send(ClientCommand::SetDefaultBackground(rgb.into())),
                 // Index 12 is cursor color, not implemented yet
                 _ => log::debug!("Unhandled dynamic color index: {}", index),
             }

@@ -1,6 +1,7 @@
+use serde::{Deserialize, Serialize};
 use vte::ansi::Color as VteColor;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Color {
     Black,
     Red,
@@ -321,7 +322,7 @@ impl Color {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum CursorShape {
     Block,
     Underline,
@@ -330,7 +331,7 @@ pub enum CursorShape {
     Hidden,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct CursorState {
     pub shape: CursorShape,
     pub hidden: bool,

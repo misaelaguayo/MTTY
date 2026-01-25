@@ -3,13 +3,14 @@ use crate::{
     config::Config,
     styles::{Color, Styles},
 };
+use serde::{Deserialize, Serialize};
 use std::fmt;
 use unicode_width::UnicodeWidthChar;
 
 #[cfg(test)]
 mod tests;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Cell {
     pub char: char,
     pub fg: Color,
@@ -153,6 +154,11 @@ impl Grid {
     /// Check if currently using alternate screen
     pub fn is_alternate(&self) -> bool {
         self.alternate
+    }
+
+    /// Get the current scroll region
+    pub fn get_scroll_region(&self) -> (usize, usize) {
+        self.scroll_region
     }
 
     pub fn swap_active_grid(&mut self) {
@@ -694,5 +700,30 @@ impl Grid {
         }
 
         self.mark_row_dirty(row);
+    }
+
+    /// Restore grid state from a snapshot
+    pub fn restore_from_snapshot(&mut self, snapshot: &crate::snapshot::TerminalSnapshot) {
+        self.width = snapshot.width;
+        self.height = snapshot.height;
+        self.cursor_pos = snapshot.cursor_pos;
+        self.saved_cursor_pos = snapshot.saved_cursor_pos;
+        self.scroll_pos = snapshot.scroll_pos;
+        self.scroll_region = snapshot.scroll_region;
+        self.alternate = snapshot.alternate_active;
+        self.styles.cursor_state = snapshot.cursor_state;
+        self.styles.active_text_color = snapshot.active_fg;
+        self.styles.active_background_color = snapshot.active_bg;
+
+        // Restore cells to the active grid
+        if self.alternate {
+            self.alternate_screen = snapshot.cells.clone();
+        } else {
+            self.cells = snapshot.cells.clone();
+        }
+
+        // Resize dirty tracking to match
+        self.dirty_rows = vec![true; self.height as usize];
+        self.dirty_count = self.height as usize;
     }
 }

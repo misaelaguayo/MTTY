@@ -18,7 +18,9 @@ use crate::{
     commands::{ClientCommand, IdentifyTerminalMode, ServerCommand, SgrAttribute},
     config::Config,
     grid::{Cell, Grid},
+    recording::{Player, Recorder},
     renderer::Renderer,
+    snapshot,
     styles::{Color, Styles},
 };
 
@@ -36,6 +38,25 @@ pub struct WgpuRunner {
     pub config: Config,
     pub tx: Sender<ServerCommand>,
     pub rx: Receiver<ClientCommand>,
+    pub player: Option<Player>,
+}
+
+impl WgpuRunner {
+    pub fn new(
+        exit_flag: Arc<AtomicBool>,
+        config: Config,
+        tx: Sender<ServerCommand>,
+        rx: Receiver<ClientCommand>,
+        player: Option<Player>,
+    ) -> Self {
+        Self {
+            exit_flag,
+            config,
+            tx,
+            rx,
+            player,
+        }
+    }
 }
 
 impl Runner for WgpuRunner {
@@ -50,6 +71,7 @@ impl Runner for WgpuRunner {
             self.exit_flag.clone(),
             self.tx.clone(),
             self.rx.resubscribe(),
+            self.player,
         );
 
         event_loop.run_app(&mut app).expect("Event loop failed");
@@ -77,6 +99,12 @@ pub struct WgpuApp {
     cursor_keys_mode: bool,
     /// Bracketed paste mode
     bracketed_paste_mode: bool,
+    /// Active recording session (if recording)
+    recorder: Option<Recorder>,
+    /// Replay player (if in replay mode)
+    player: Option<Player>,
+    /// Whether replay is currently playing automatically
+    replay_playing: bool,
 }
 
 impl ApplicationHandler for WgpuApp {
@@ -112,16 +140,20 @@ impl ApplicationHandler for WgpuApp {
                 );
                 self.config.cols = new_cols;
                 self.config.rows = new_rows;
-                self.grid = Grid::new(&self.config);
 
-                // Notify the PTY of the correct size
-                if let Err(e) = self.tx.send(ServerCommand::Resize(
-                    new_cols,
-                    new_rows,
-                    self.config.width as u16,
-                    self.config.height as u16,
-                )) {
-                    log::warn!("Failed to send resize command: {}", e);
+                // In replay mode, don't recreate the grid (it's restored from snapshot)
+                if self.player.is_none() {
+                    self.grid = Grid::new(&self.config);
+
+                    // Notify the PTY of the correct size
+                    if let Err(e) = self.tx.send(ServerCommand::Resize(
+                        new_cols,
+                        new_rows,
+                        self.config.width as u16,
+                        self.config.height as u16,
+                    )) {
+                        log::warn!("Failed to send resize command: {}", e);
+                    }
                 }
             }
 
@@ -184,16 +216,30 @@ impl ApplicationHandler for WgpuApp {
             return;
         }
 
-        // Process incoming commands
-        self.process_commands();
+        // Handle replay mode
+        if self.player.is_some() {
+            if self.replay_playing {
+                // Auto-advance in replay mode
+                self.replay_step_forward();
+                if let Some(ref player) = self.player {
+                    if player.is_finished() {
+                        self.replay_playing = false;
+                        self.update_replay_title();
+                    }
+                }
+            }
+        } else {
+            // Normal mode: Process incoming commands from PTY
+            self.process_commands();
 
-        // Process buffered input
-        self.process_input();
+            // Process buffered input
+            self.process_input();
 
-        // Apply debounced resize if deadline has passed
-        if let Some(deadline) = self.resize_deadline {
-            if Instant::now() >= deadline {
-                self.apply_pending_resize();
+            // Apply debounced resize if deadline has passed
+            if let Some(deadline) = self.resize_deadline {
+                if Instant::now() >= deadline {
+                    self.apply_pending_resize();
+                }
             }
         }
 
@@ -204,10 +250,11 @@ impl ApplicationHandler for WgpuApp {
             }
         }
 
-        // Always use WaitUntil to avoid busy-looping - never use Poll
-        // 8ms gives ~120fps max which is responsive enough for typing
+        // Control frame rate
+        // In replay mode with playing, use faster rate for smoother playback
+        let delay = if self.replay_playing { 16 } else { 8 };
         event_loop.set_control_flow(ControlFlow::WaitUntil(
-            Instant::now() + Duration::from_millis(8),
+            Instant::now() + Duration::from_millis(delay),
         ));
     }
 }
@@ -219,16 +266,29 @@ impl WgpuApp {
         exit_flag: Arc<AtomicBool>,
         tx: Sender<ServerCommand>,
         rx: Receiver<ClientCommand>,
+        player: Option<Player>,
     ) -> Self {
         log::info!("Grid size: {} x {}", config.rows, config.cols);
+
+        // If we have a player, initialize grid from the recording's initial state
+        let (grid, title) = if let Some(ref p) = player {
+            let initial = p.initial_state();
+            let mut grid = Grid::new(config);
+            grid.restore_from_snapshot(initial);
+            let title = format!("MTTY - Replay (0/{})", p.total_events());
+            (grid, title)
+        } else {
+            (Grid::new(config), title.to_string())
+        };
+
         Self {
-            title: title.to_string(),
+            title,
             exit_flag,
             input: String::new(),
             tx,
             rx,
             config: config.clone(),
-            grid: Grid::new(config),
+            grid,
             window: None,
             renderer: None,
             modifiers: winit::keyboard::ModifiersState::empty(),
@@ -237,10 +297,17 @@ impl WgpuApp {
             debug_info: DebugInfo::new(),
             cursor_keys_mode: false,
             bracketed_paste_mode: false,
+            recorder: None,
+            player,
+            replay_playing: false,
         }
     }
 
     fn send_raw_data(&self, data: Vec<u8>) {
+        // Don't send data in replay mode (no PTY)
+        if self.player.is_some() {
+            return;
+        }
         if let Err(e) = self.tx.send(ServerCommand::RawData(data)) {
             log::warn!("Failed to send raw data: {}", e);
         }
@@ -576,7 +643,48 @@ impl WgpuApp {
             return;
         }
 
-        // Handle special keys
+        // Handle replay mode controls FIRST (before normal key handling)
+        if self.player.is_some() {
+            match event.physical_key {
+                PhysicalKey::Code(KeyCode::Space) => {
+                    self.replay_playing = !self.replay_playing;
+                    self.update_replay_title();
+                    return;
+                }
+                PhysicalKey::Code(KeyCode::ArrowRight) | PhysicalKey::Code(KeyCode::KeyN) => {
+                    self.replay_step_forward();
+                    return;
+                }
+                PhysicalKey::Code(KeyCode::ArrowLeft) | PhysicalKey::Code(KeyCode::KeyP) => {
+                    self.replay_step_backward();
+                    return;
+                }
+                PhysicalKey::Code(KeyCode::Home) => {
+                    self.replay_reset();
+                    return;
+                }
+                PhysicalKey::Code(KeyCode::Escape) => {
+                    // Exit replay mode
+                    self.exit_flag.store(true, std::sync::atomic::Ordering::Relaxed);
+                    return;
+                }
+                // Toggle debug overlay even in replay mode
+                PhysicalKey::Code(KeyCode::KeyI)
+                    if self.modifiers.control_key() && self.modifiers.shift_key() =>
+                {
+                    self.debug_info.show = !self.debug_info.show;
+                    if let Some(window) = &self.window {
+                        window.request_redraw();
+                    }
+                    return;
+                }
+                _ => {}
+            }
+            // In replay mode, ignore other keyboard input
+            return;
+        }
+
+        // Handle special keys (normal mode only)
         match event.physical_key {
             PhysicalKey::Code(KeyCode::Backspace) => {
                 // Send DEL (127) for xterm-256color compatibility, not Ctrl+H (8)
@@ -639,15 +747,30 @@ impl WgpuApp {
             _ => {}
         }
 
-        // Handle Ctrl+Shift+I to toggle debug overlay
+        // Handle Ctrl+Shift shortcuts
         if self.modifiers.control_key() && self.modifiers.shift_key() {
-            if let PhysicalKey::Code(KeyCode::KeyI) = event.physical_key {
-                self.debug_info.show = !self.debug_info.show;
-                // Request redraw to show/hide the overlay
-                if let Some(window) = &self.window {
-                    window.request_redraw();
+            match event.physical_key {
+                PhysicalKey::Code(KeyCode::KeyI) => {
+                    // Toggle debug overlay
+                    self.debug_info.show = !self.debug_info.show;
+                    if let Some(window) = &self.window {
+                        window.request_redraw();
+                    }
+                    return;
                 }
-                return;
+                PhysicalKey::Code(KeyCode::KeyS) => {
+                    // Take snapshot
+                    self.take_snapshot();
+                    return;
+                }
+                PhysicalKey::Code(KeyCode::KeyR) => {
+                    // Toggle recording (only in normal mode, not replay)
+                    if self.player.is_none() {
+                        self.toggle_recording();
+                    }
+                    return;
+                }
+                _ => {}
             }
         }
 
@@ -730,6 +853,11 @@ impl WgpuApp {
         };
         self.resize_deadline = None;
 
+        // Don't send resize to PTY in replay mode
+        if self.player.is_some() {
+            return;
+        }
+
         // Grid and config were already updated in handle_resize
         // Now send the debounced PTY resize command
         log::info!(
@@ -773,6 +901,10 @@ impl WgpuApp {
         while now.elapsed().as_millis() < 50 {
             match self.rx.try_recv() {
                 Ok(command) => {
+                    // Record command if recording is active
+                    if let Some(ref mut recorder) = self.recorder {
+                        recorder.record_command(&command);
+                    }
                     self.handle_command(command);
                 }
                 Err(tokio::sync::broadcast::error::TryRecvError::Empty) => {
@@ -794,6 +926,108 @@ impl WgpuApp {
         while !self.input.is_empty() {
             let c = self.input.remove(0);
             self.send_raw_data(vec![c as u8]);
+        }
+    }
+
+    fn take_snapshot(&mut self) {
+        match snapshot::take_snapshot(&self.grid) {
+            Ok(path) => {
+                log::info!("Snapshot saved to: {:?}", path);
+            }
+            Err(e) => {
+                log::error!("Failed to save snapshot: {}", e);
+            }
+        }
+    }
+
+    fn toggle_recording(&mut self) {
+        if let Some(recorder) = self.recorder.take() {
+            // Stop recording
+            match recorder.finish(&self.grid) {
+                Ok(path) => {
+                    log::info!("Recording saved to: {:?}", path);
+                    self.title = "MTTY".to_string();
+                }
+                Err(e) => {
+                    log::error!("Failed to save recording: {}", e);
+                }
+            }
+        } else {
+            // Start recording
+            self.recorder = Some(Recorder::new(&self.grid));
+            self.title = "MTTY - Recording".to_string();
+            log::info!("Recording started");
+        }
+        if let Some(window) = &self.window {
+            window.set_title(&self.title);
+        }
+    }
+
+    fn replay_step_forward(&mut self) {
+        if let Some(ref mut player) = self.player {
+            if let Some(command) = player.step_forward() {
+                let cmd = command.clone();
+                self.handle_command(cmd);
+                self.update_replay_title();
+            }
+        }
+    }
+
+    fn replay_step_backward(&mut self) {
+        // First, collect the data we need from the player
+        let replay_data = if let Some(ref mut player) = self.player {
+            if player.step_backward() {
+                let target_pos = player.position();
+                let initial = player.initial_state().clone();
+                player.reset();
+
+                // Collect commands up to target position
+                let mut commands = Vec::new();
+                for _ in 0..target_pos {
+                    if let Some(command) = player.step_forward() {
+                        commands.push(command.clone());
+                    }
+                }
+                Some((initial, commands))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        // Now replay with full ownership of self
+        if let Some((initial, commands)) = replay_data {
+            self.grid.restore_from_snapshot(&initial);
+            for cmd in commands {
+                self.handle_command(cmd);
+            }
+            self.update_replay_title();
+        }
+    }
+
+    fn replay_reset(&mut self) {
+        if let Some(ref mut player) = self.player {
+            let initial = player.initial_state().clone();
+            self.grid.restore_from_snapshot(&initial);
+            player.reset();
+            self.replay_playing = false;
+            self.update_replay_title();
+        }
+    }
+
+    fn update_replay_title(&mut self) {
+        if let Some(ref player) = self.player {
+            let status = if self.replay_playing { "Playing" } else { "Paused" };
+            self.title = format!(
+                "MTTY - Replay [{}/{}] {}",
+                player.position(),
+                player.total_events(),
+                status
+            );
+            if let Some(window) = &self.window {
+                window.set_title(&self.title);
+            }
         }
     }
 }
